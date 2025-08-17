@@ -254,20 +254,26 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     pdf.setFont(FONT_NAME, 12)
+
     if ten_don_vi:
         pdf.drawString(20*mm, height - 15*mm, ten_don_vi.upper())
+
     pdf.drawCentredString(width/2, height - 20*mm, "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM")
     pdf.drawCentredString(width/2, height - 25*mm, "Độc lập - Tự do - Hạnh phúc")
     pdf.drawCentredString(width/2, height - 30*mm, "--------------------------")
     pdf.drawRightString(width - 20*mm, height - 35*mm, "Mẫu số: 01/TNDN")
+
     pdf.setFont(FONT_NAME, 14)
     pdf.drawCentredString(width/2, height - 50*mm, "BẢNG KÊ THU MUA HÀNG HÓA, DỊCH VỤ")
     pdf.drawCentredString(width/2, height - 55*mm, "KHÔNG CÓ HÓA ĐƠN")
+
     pdf.setFont(FONT_NAME, 12)
     pdf.drawString(20*mm, height - 70*mm, f"Họ và tên người bán: {data['ho_va_ten']}")
     pdf.drawString(20*mm, height - 75*mm, f"Số CCCD: {data['so_cccd']}")
     pdf.drawString(20*mm, height - 80*mm, f"Quê quán: {data['que_quan']}")
     pdf.drawString(20*mm, height - 85*mm, f"Ngày lập: {data['ngay_tao']}")
+
+    # --- Bảng hàng hóa ---
     y = height - 100*mm
     pdf.rect(20*mm, y-20*mm, 170*mm, 20*mm)
     pdf.drawString(22*mm, y - 5*mm, "STT")
@@ -276,30 +282,38 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     pdf.drawString(120*mm, y - 5*mm, "Số lượng")
     pdf.drawString(140*mm, y - 5*mm, "Đơn giá")
     pdf.drawString(170*mm, y - 5*mm, "Thành tiền")
+
     pdf.drawString(22*mm, y - 15*mm, "1")
     pdf.drawString(35*mm, y - 15*mm, "Hàng hóa")
     pdf.drawString(100*mm, y - 15*mm, "chỉ")
     pdf.drawString(120*mm, y - 15*mm, f"{data['so_luong']:,.2f}")
     pdf.drawString(140*mm, y - 15*mm, f"{data['don_gia']:,.0f}")
     pdf.drawString(170*mm, y - 15*mm, f"{data['thanh_tien']:,.0f}")
+
+    # --- Tổng cộng ---
     y -= 30*mm
     pdf.drawString(20*mm, y, f"Tổng cộng: {data['thanh_tien']:,.0f} VNĐ")
+
     y -= 5*mm
     pdf.drawString(20*mm, y, f"Bằng chữ: {doc_so_thanh_chu(data['thanh_tien'])}")
-   # --- Xuống cuối trang để thêm ngày tháng và chữ ký ---
+
+    # --- Xuống ngay dưới để thêm ngày tháng và chữ ký ---
+    y -= 20*mm
     pdf.setFont(FONT_NAME, 11)
-    pdf.drawRightString(width - 30*mm, 70*mm, "Hà Nội, ngày 17 tháng 08 năm 2025")
+    pdf.drawRightString(width - 30*mm, y, "Hà Nội, ngày 17 tháng 08 năm 2025")
 
-# Người mua (bên trái)
-    pdf.drawString(30*mm, 60*mm, "Người mua")
-    pdf.drawString(30*mm, 55*mm, "(Ký, ghi rõ họ tên)")
+    # Người mua (bên trái)
+    pdf.drawString(30*mm, y - 20, "Người mua")
+    pdf.drawString(30*mm, y - 30, "(Ký, ghi rõ họ tên)")
 
-# Giám đốc (bên phải)
-    pdf.drawRightString(width - 30*mm, 60*mm, "Giám đốc")
-    pdf.drawRightString(width - 30*mm, 55*mm, "(Ký, đóng dấu)")
+    # Giám đốc (bên phải)
+    pdf.drawRightString(width - 30*mm, y - 20, "Giám đốc")
+    pdf.drawRightString(width - 30*mm, y - 30, "(Ký, đóng dấu)")
+
     pdf.save()
     buffer.seek(0)
     return buffer
+
 
 # ========== GIAO DIỆN ==========
 def login_page():
