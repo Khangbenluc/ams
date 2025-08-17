@@ -79,7 +79,7 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
   - Quê quán: {que_quan}
   ----------------------------------------
   Chi tiết giao dịch:
-  - Khối lượng: {so_luong}
+  - Khối lượng: {so_luong} chỉ
   - Đơn giá: {don_gia:,.0f} VNĐ
   - Thành tiền: {thanh_tien:,.0f} VNĐ
   ----------------------------------------
