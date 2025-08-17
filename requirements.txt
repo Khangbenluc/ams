@@ -1,5 +1,6 @@
 streamlit
-easyocr
+paddleocr
+paddlepaddle
 opencv-python
 numpy
 pandas
