@@ -364,20 +364,20 @@ def create_new_transaction_page():
         if anh_cccd:
             with st.spinner('Đang xử lý OCR...'):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(anh_cccd.read())
-                # Cập nhật session_state để điền vào các ô nhập liệu
+                # Cập nhật session_state để lưu dữ liệu
                 st.session_state.ho_ten = ho_ten
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
-            st.success("Trích xuất thành công! Dữ liệu đã được điền vào form.")
+            st.success("Đã trích xuất thông tin CCCD!")
             # Loại bỏ st.rerun() để tránh vòng lặp
         elif uploaded_cccd:
             with st.spinner('Đang xử lý OCR...'):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(uploaded_cccd.read())
-                # Cập nhật session_state để điền vào các ô nhập liệu
+                # Cập nhật session_state để lưu dữ liệu
                 st.session_state.ho_ten = ho_ten
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
-            st.success("Trích xuất thành công! Dữ liệu đã được điền vào form.")
+            st.success("Đã trích xuất thông tin CCCD!")
             # Loại bỏ st.rerun() để tránh vòng lặp
     
     with col_can:
@@ -389,33 +389,37 @@ def create_new_transaction_page():
         if anh_can:
             with st.spinner('Đang xử lý OCR...'):
                 so_luong = trich_xuat_can(anh_can.read())
-                # Cập nhật session_state để điền vào ô nhập liệu
+                # Cập nhật session_state để lưu dữ liệu
                 st.session_state.so_luong = so_luong
-            st.success("Trích xuất thành công! Khối lượng đã được điền vào form.")
+            st.success("Đã trích xuất khối lượng!")
             # Loại bỏ st.rerun() để tránh vòng lặp
         elif uploaded_can:
             with st.spinner('Đang xử lý OCR...'):
                 so_luong = trich_xuat_can(uploaded_can.read())
-                # Cập nhật session_state để điền vào ô nhập liệu
+                # Cập nhật session_state để lưu dữ liệu
                 st.session_state.so_luong = so_luong
-            st.success("Trích xuất thành công! Khối lượng đã được điền vào form.")
+            st.success("Đã trích xuất khối lượng!")
             # Loại bỏ st.rerun() để tránh vòng lặp
 
     st.markdown("---")
 
-    st.subheader("2. Tạo bản kê và lưu giao dịch 📝")
-    ho_ten_input = st.text_input("Họ và Tên", value=st.session_state.ho_ten)
-    so_cccd_input = st.text_input("Số Căn cước công dân", value=st.session_state.so_cccd)
-    que_quan_input = st.text_input("Quê quán", value=st.session_state.que_quan)
-    so_luong_input = st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong)
+    st.subheader("2. Nhập đơn giá và lưu giao dịch 📝")
+    
+    # Hiển thị thông tin đã trích xuất (để người dùng có thể kiểm tra)
+    st.info(f"Họ và Tên: **{st.session_state.ho_ten}**")
+    st.info(f"Số CCCD: **{st.session_state.so_cccd}**")
+    st.info(f"Quê quán: **{st.session_state.que_quan}**")
+    st.info(f"Khối lượng: **{st.session_state.so_luong}** chỉ")
+    
+    # Chỉ giữ lại ô nhập liệu cho Đơn giá
     don_gia_input = st.text_input("Đơn giá (VNĐ/chỉ)")
     ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)")
 
     if st.button("Lưu giao dịch"):
-        if not ho_ten_input or not so_luong_input or not don_gia_input:
-            st.error("Vui lòng nhập đầy đủ thông tin.")
+        if not st.session_state.ho_ten or not st.session_state.so_luong or not don_gia_input:
+            st.error("Vui lòng đảm bảo đã trích xuất thông tin và nhập đơn giá trước khi lưu.")
         else:
-            giao_dich_data = xu_ly_giao_dich(ho_ten_input, so_cccd_input, que_quan_input, so_luong_input, don_gia_input)
+            giao_dich_data = xu_ly_giao_dich(st.session_state.ho_ten, st.session_state.so_cccd, st.session_state.que_quan, st.session_state.so_luong, don_gia_input)
             if giao_dich_data:
                 st.success("Giao dịch đã được lưu thành công!")
                 
