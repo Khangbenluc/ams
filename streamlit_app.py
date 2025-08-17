@@ -1,18 +1,18 @@
 import streamlit as st
+import pytesseract
+from PIL import Image
 import cv2
 import numpy as np
 import pandas as pd
 from datetime import datetime
 import os
 import pytz
-from paddleocr import PaddleOCR
+import re
 
 # --- Khởi tạo và Thiết lập ---
-@st.cache_resource
-def get_reader():
-    return PaddleOCR(lang="vi", use_angle_cls=False)
+# Cấu hình đường dẫn Tesseract (nếu chạy cục bộ trên máy tính)
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
-ocr = get_reader()
 lich_su_file = 'lich_su_giao_dich.csv'
 
 if not os.path.exists(lich_su_file):
@@ -20,43 +20,46 @@ if not os.path.exists(lich_su_file):
     df.to_csv(lich_su_file, index=False)
 
 # --- Các hàm xử lý logic ---
-def trich_xuat_cccd(image_path):
-    if image_path is None:
-        return "", "", ""
-    img = cv2.imread(image_path)
-    result = ocr.ocr(img, cls=False)
-    
-    ho_ten, so_cccd, que_quan = "", "", ""
-    
-    for line in result[0]:
-        text = line[1][0].upper()
+def trich_xuat_cccd(image):
+    if image is None: return "", "", ""
+    try:
+        img_pil = Image.open(image)
+        text = pytesseract.image_to_string(img_pil, lang='vie+eng')
+        lines = text.split('\n')
         
-        if "HỌ VÀ TÊN" in text:
-            ho_ten_line_index = result[0].index(line)
-            if ho_ten_line_index + 1 < len(result[0]):
-                ho_ten = result[0][ho_ten_line_index + 1][1][0]
-        elif "SỐ" in text and len(text.split()[-1]) == 12:
-            so_cccd = text.split()[-1]
-        elif "QUÊ QUÁN" in text:
-            que_quan_line_index = result[0].index(line)
-            if que_quan_line_index + 1 < len(result[0]):
-                que_quan = result[0][que_quan_line_index + 1][1][0]
-    
-    return ho_ten, so_cccd, que_quan
+        ho_ten, so_cccd, que_quan = "", "", ""
+        
+        for i, line in enumerate(lines):
+            line_upper = line.strip().upper()
+            if "HỌ VÀ TÊN" in line_upper:
+                # Tìm dòng tiếp theo sau "Họ và Tên"
+                if i + 1 < len(lines):
+                    ho_ten = lines[i+1].strip()
+            elif "SỐ" in line_upper:
+                # Sử dụng biểu thức chính quy để tìm 12 chữ số
+                match = re.search(r'\d{12}', line)
+                if match:
+                    so_cccd = match.group(0)
+            elif "QUÊ QUÁN" in line_upper:
+                # Tìm dòng tiếp theo sau "Quê quán"
+                if i + 1 < len(lines):
+                    que_quan = lines[i+1].strip()
+        
+        return ho_ten, so_cccd, que_quan
+    except Exception as e:
+        st.error(f"Lỗi khi trích xuất CCCD: {e}")
+        return "", "", ""
 
-def trich_xuat_can(image_path):
-    if image_path is None:
-        return ""
-    img = cv2.imread(image_path)
-    result = ocr.ocr(img, cls=False)
-    
-    for line in result[0]:
-        text = line[1][0]
+def trich_xuat_can(image):
+    if image is None: return ""
+    try:
+        img_pil = Image.open(image)
+        text = pytesseract.image_to_string(img_pil, config='--psm 6 outputbase digits')
         cleaned_text = ''.join(c for c in text if c.isdigit() or c == '.')
-        if cleaned_text:
-            return cleaned_text
-    
-    return ""
+        return cleaned_text
+    except Exception as e:
+        st.error(f"Lỗi khi trích xuất từ cân: {e}")
+        return ""
 
 def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
     try:
@@ -79,11 +82,11 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
   - Quê quán: {que_quan}
   ----------------------------------------
   Chi tiết giao dịch:
-  - Khối lượng: {so_luong} chỉ
+  - Khối lượng: {so_luong}
   - Đơn giá: {don_gia:,.0f} VNĐ
   - Thành tiền: {thanh_tien:,.0f} VNĐ
   ----------------------------------------
-  Bến Lức, ngày {ngay_tao}
+  TP. HCM, ngày {ngay_tao}
       NGƯỜI BÁN                   KHÁCH HÀNG
       (Ký tên)                     (Ký tên)
     """
@@ -115,11 +118,7 @@ with col1:
     st.subheader("Trích xuất từ CCCD")
     anh_cccd = st.camera_input("Chụp hoặc tải ảnh CCCD")
     if anh_cccd:
-        img_temp_path = "temp_cccd.jpg"
-        with open(img_temp_path, "wb") as f:
-            f.write(anh_cccd.read())
-        st.session_state.ho_ten, st.session_state.so_cccd, st.session_state.que_quan = trich_xuat_cccd(img_temp_path)
-        os.remove(img_temp_path)
+        st.session_state.ho_ten, st.session_state.so_cccd, st.session_state.que_quan = trich_xuat_cccd(anh_cccd)
     
 with col2:
     st.subheader("Nhập liệu thủ công")
@@ -136,11 +135,7 @@ with col3:
     st.subheader("Trích xuất từ cân")
     anh_can = st.camera_input("Chụp hoặc tải ảnh màn hình cân")
     if anh_can:
-        img_temp_path = "temp_can.jpg"
-        with open(img_temp_path, "wb") as f:
-            f.write(anh_can.read())
-        st.session_state.so_luong = trich_xuat_can(img_temp_path)
-        os.remove(img_temp_path)
+        st.session_state.so_luong = trich_xuat_can(anh_can)
 
 with col4:
     st.subheader("Nhập liệu thủ công")
