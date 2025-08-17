@@ -121,136 +121,112 @@ def preprocess_image(img_bytes):
         st.error(f"Lỗi khi tiền xử lý ảnh: {e}")
         return None
 
-# --- Hàm OCR CCCD (cực an toàn) ---
+# 2. Hàm OCR CCCD
 def trich_xuat_cccd(image_bytes):
     ho_ten, so_cccd, que_quan = "", "", ""
     try:
-        if image_bytes is None:
+        base_bgr = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+        if base_bgr is None:
             return ho_ten, so_cccd, que_quan
 
-        preprocessed_img = preprocess_image(image_bytes)
-        if preprocessed_img is None:
-            return ho_ten, so_cccd, que_quan
+        gray = cv2.cvtColor(base_bgr, cv2.COLOR_BGR2GRAY)
+        eq = cv2.equalizeHist(gray)
+        proc_bgr = cv2.cvtColor(eq, cv2.COLOR_GRAY2BGR)
 
-        result = ocr.ocr(preprocessed_img)
+        result = ocr.ocr(proc_bgr)
         all_text_raw = _extract_texts_from_ocr_result(result)
-
         if not all_text_raw:
             return ho_ten, so_cccd, que_quan
 
-        # Dùng bản UPPER để dò nhãn, giữ nguyên bản gốc để lấy giá trị
         all_text_upper = [t.upper() for t in all_text_raw]
 
-        # Họ và Tên: lấy dòng ngay sau dòng chứa "HỌ VÀ TÊN"
-        for i, txt_u in enumerate(all_text_upper):
-            if "HỌ VÀ TÊN" in txt_u:
-                if i + 1 < len(all_text_raw):
-                    ho_ten = all_text_raw[i + 1].strip()
+        for i, t in enumerate(all_text_upper):
+            if "HỌ VÀ TÊN" in t and i + 1 < len(all_text_raw):
+                ho_ten = all_text_raw[i + 1].strip()
                 break
 
-        # Số CCCD: chuỗi 12 chữ số (bỏ khoảng trắng trước khi match)
         import re
-        so_cccd_pattern = re.compile(r"\d{12}")
         for t in all_text_raw:
-            m = so_cccd_pattern.search(t.replace(" ", ""))
+            m = re.search(r"\d{12}", t.replace(" ", ""))
             if m:
                 so_cccd = m.group(0)
                 break
 
-        # Quê quán: lấy dòng ngay sau dòng chứa "QUÊ QUÁN"
-        for i, txt_u in enumerate(all_text_upper):
-            if "QUÊ QUÁN" in txt_u:
-                if i + 1 < len(all_text_raw):
-                    que_quan = all_text_raw[i + 1].strip()
+        for i, t in enumerate(all_text_upper):
+            if "QUÊ QUÁN" in t and i + 1 < len(all_text_raw):
+                que_quan = all_text_raw[i + 1].strip()
                 break
 
         return ho_ten, so_cccd, que_quan
-
-    except Exception as e:
-        st.error(f"Lỗi khi xử lý OCR CCCD: {e}")
+    except Exception:
         return "", "", ""
 
 
 
-# --- Hàm OCR cân ---
-# --- Hàm OCR cân (cực an toàn) ---
+
+# 3. Hàm OCR cân
 def trich_xuat_can(image_bytes):
     try:
-        if image_bytes is None:
+        base_bgr = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+        if base_bgr is None:
             return ""
 
-        preprocessed_img = preprocess_image(image_bytes)
-        if preprocessed_img is None:
-            return ""
+        gray = cv2.cvtColor(base_bgr, cv2.COLOR_BGR2GRAY)
+        thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                    cv2.THRESH_BINARY, 31, 10)
+        proc_bgr = cv2.cvtColor(thr, cv2.COLOR_GRAY2BGR)
 
-        result = ocr.ocr(preprocessed_img)
+        result = ocr.ocr(proc_bgr)
         texts = _extract_texts_from_ocr_result(result)
         if not texts:
             return ""
 
-        # Lọc ra tất cả cụm "số & dấu chấm", chọn cái hợp lý nhất
         import re
         candidates = []
         for t in texts:
-            # gom mọi cụm số (có thể kèm dấu . hoặc ,)
-            for m in re.findall(r"[0-9]+(?:[.,][0-9]+)?", t):
+            for m in re.findall(r"[0-9]+(?:[.,][0-9]+)?", str(t)):
                 val = m.replace(",", ".")
                 try:
                     candidates.append((m, float(val)))
-                except ValueError:
-                    continue
+                except:
+                    pass
 
         if not candidates:
             return ""
-
-        # Lấy số có giá trị lớn nhất (thường là số hiển thị cân)
         candidates.sort(key=lambda x: x[1], reverse=True)
-        best = candidates[0][0]
-        # Chuẩn hóa giữ dấu chấm làm phân cách thập phân
-        best = best.replace(",", ".")
-        return best
-
-    except Exception as e:
-        st.error(f"Lỗi khi xử lý OCR cân: {e}")
+        return candidates[0][0].replace(",", ".")
+    except Exception:
         return ""
 
 
-# Helper: lấy text an toàn từ kết quả PaddleOCR (mọi phiên bản/kiểu cấu trúc)
+# 1. Helper chung
 def _extract_texts_from_ocr_result(result):
     texts = []
     try:
         if not result:
             return texts
-        batch = result[0] if isinstance(result, list) else result
+        batch = result[0] if isinstance(result, (list, tuple)) else result
         if not batch:
             return texts
-
         for line in batch:
-            # TH phổ biến: [bbox, (text, score)]
             if isinstance(line, (list, tuple)):
                 if len(line) >= 2:
                     item = line[1]
                     if isinstance(item, (list, tuple)):
-                        # (text, score) hoặc [text, score]
                         if len(item) >= 1 and isinstance(item[0], str):
                             texts.append(item[0])
                     elif isinstance(item, dict) and isinstance(item.get("text"), str):
                         texts.append(item["text"])
                     elif isinstance(item, str):
                         texts.append(item)
-                else:
-                    # Phòng khi line là (text, score) trực tiếp
-                    if len(line) >= 1 and isinstance(line[0], str):
-                        texts.append(line[0])
-
-            # Một số bản trả về dict
+                elif len(line) >= 1 and isinstance(line[0], str):
+                    texts.append(line[0])
             elif isinstance(line, dict) and isinstance(line.get("text"), str):
                 texts.append(line["text"])
-
     except Exception:
-        # Không để hàm nổ — trả về những gì gom được
         pass
     return texts
+
 
 # --- Hàm tính tiền và lưu SQLite ---
 def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
