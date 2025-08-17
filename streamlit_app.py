@@ -131,17 +131,21 @@ def trich_xuat_cccd(image_bytes):
         preprocessed_img = preprocess_image(image_bytes)
         result = ocr.ocr(preprocessed_img) 
         
+        # Thêm kiểm tra ở đây để tránh lỗi index
         if not result or not result[0]:
             return ho_ten, so_cccd, que_quan
             
-        # Nối tất cả các dòng text đã được OCR thành một chuỗi lớn để dễ tìm kiếm
-        all_text = [line[1][0].upper() for line in result[0]]
-
+        all_text = []
+        for line in result[0]:
+            # Đảm bảo cấu trúc của line là đúng trước khi truy cập
+            if isinstance(line, list) and len(line) > 1 and isinstance(line[1], tuple) and len(line[1]) > 0:
+                text = line[1][0].upper()
+                all_text.append(text)
+        
         # Tìm kiếm Họ và Tên
         ho_ten_found = False
         for i, text in enumerate(all_text):
             if "HỌ VÀ TÊN" in text:
-                # Lấy dòng tiếp theo và kiểm tra
                 if i + 1 < len(all_text):
                     ho_ten = all_text[i + 1]
                     ho_ten_found = True
@@ -180,10 +184,12 @@ def trich_xuat_can(image_bytes):
         
         if result and result[0]:
             for line in result[0]:
-                text = line[1][0]
-                cleaned_text = ''.join(c for c in text if c.isdigit() or c == '.')
-                if cleaned_text:
-                    return cleaned_text
+                # Đảm bảo cấu trúc của line là đúng trước khi truy cập
+                if isinstance(line, list) and len(line) > 1 and isinstance(line[1], tuple) and len(line[1]) > 0:
+                    text = line[1][0]
+                    cleaned_text = ''.join(c for c in text if c.isdigit() or c == '.')
+                    if cleaned_text:
+                        return cleaned_text
         return ""
     except Exception as e:
         st.error(f"Lỗi khi xử lý OCR cân: {e}")
@@ -360,46 +366,36 @@ def create_new_transaction_page():
         anh_cccd = st.camera_input("Chụp ảnh CCCD")
         uploaded_cccd = st.file_uploader("Hoặc tải ảnh CCCD", type=["jpg", "jpeg", "png"], key="cccd_uploader")
         
-        # Logic trích xuất và lưu vào session state
         if anh_cccd:
             with st.spinner('Đang xử lý OCR...'):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(anh_cccd.read())
-                # Cập nhật session_state để lưu dữ liệu
                 st.session_state.ho_ten = ho_ten
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
             st.success("Đã trích xuất thông tin CCCD!")
-            # Loại bỏ st.rerun() để tránh vòng lặp
         elif uploaded_cccd:
             with st.spinner('Đang xử lý OCR...'):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(uploaded_cccd.read())
-                # Cập nhật session_state để lưu dữ liệu
                 st.session_state.ho_ten = ho_ten
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
             st.success("Đã trích xuất thông tin CCCD!")
-            # Loại bỏ st.rerun() để tránh vòng lặp
     
     with col_can:
         st.subheader("Chụp ảnh hoặc tải ảnh cân")
         anh_can = st.camera_input("Chụp ảnh màn hình cân")
         uploaded_can = st.file_uploader("Hoặc tải ảnh cân", type=["jpg", "jpeg", "png"], key="can_uploader")
         
-        # Logic trích xuất và lưu vào session state
         if anh_can:
             with st.spinner('Đang xử lý OCR...'):
                 so_luong = trich_xuat_can(anh_can.read())
-                # Cập nhật session_state để lưu dữ liệu
                 st.session_state.so_luong = so_luong
             st.success("Đã trích xuất khối lượng!")
-            # Loại bỏ st.rerun() để tránh vòng lặp
         elif uploaded_can:
             with st.spinner('Đang xử lý OCR...'):
                 so_luong = trich_xuat_can(uploaded_can.read())
-                # Cập nhật session_state để lưu dữ liệu
                 st.session_state.so_luong = so_luong
             st.success("Đã trích xuất khối lượng!")
-            # Loại bỏ st.rerun() để tránh vòng lặp
 
     st.markdown("---")
 
