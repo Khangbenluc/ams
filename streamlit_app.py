@@ -187,19 +187,25 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
         return None
 
 # --- Hàm tạo PDF theo mẫu 01/TNDN ---
-# Cố gắng đăng ký font Times New Roman, nếu không được thì dùng font Vera
+# Cố gắng đăng ký font Arial, nếu không được thì dùng font mặc định
+FONT_FILE = "Arial.ttf"
+FONT_NAME = "Arial"
 try:
-    pdfmetrics.registerFont(TTFont('TimesNewRoman', 'Times New Roman.ttf'))
-    FONT_NAME = 'TimesNewRoman'
-except:
-    st.warning("Không tìm thấy font 'Times New Roman.ttf'. Sử dụng font 'Vera' thay thế.")
-    pdfmetrics.registerFont(TTFont('Vera', 'Vera.ttf'))
-    FONT_NAME = 'Vera'
+    if os.path.exists(FONT_FILE):
+        pdfmetrics.registerFont(TTFont(FONT_NAME, FONT_FILE))
+    else:
+        st.warning(f"Không tìm thấy font '{FONT_FILE}'. Vui lòng đặt font vào cùng thư mục với file app.")
+except Exception as e:
+    st.error(f"Lỗi khi đăng ký font: {e}")
+    st.warning("Ứng dụng sẽ sử dụng font mặc định, có thể không hiển thị được tiếng Việt.")
+    FONT_NAME = "Helvetica" # Font mặc định của reportlab
 
 def tao_pdf_mau_01(data, ten_don_vi=""):
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
+    
+    # Đảm bảo font được sử dụng đã được đăng ký
     pdf.setFont(FONT_NAME, 12)
 
     # Tiêu đề
@@ -354,7 +360,7 @@ def create_new_transaction_page():
 
     st.markdown("---")
 
-    st.subheader("2. Tạo bản kê và lưu giao dịch 📝")
+    st.subheader("2. Tạo bản kê và lưu giao dịch �")
     with st.form("form_giao_dich"):
         ho_ten_input = st.text_input("Họ và Tên", value=st.session_state.ho_ten)
         so_cccd_input = st.text_input("Số Căn cước công dân", value=st.session_state.so_cccd)
@@ -480,3 +486,4 @@ if __name__ == "__main__":
         main_app()
     else:
         login_page()
+�
