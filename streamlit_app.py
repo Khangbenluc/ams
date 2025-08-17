@@ -310,6 +310,8 @@ def create_new_transaction_page():
         st.session_state.que_quan = ""
     if 'so_luong' not in st.session_state:
         st.session_state.so_luong = ""
+    if 'pdf_for_download' not in st.session_state:
+        st.session_state.pdf_for_download = None
 
     st.subheader("1. Trích xuất thông tin từ ảnh 🖼️")
     col_cccd, col_can = st.columns(2)
@@ -376,14 +378,18 @@ def create_new_transaction_page():
                     st.write(f"Bằng chữ: {doc_so_thanh_chu(giao_dich_data['thanh_tien'])}")
                     
                     pdf_bytes = tao_pdf_mau_01(giao_dich_data, ten_don_vi)
+                    # Lưu dữ liệu PDF và giao dịch vào session_state
+                    st.session_state.pdf_for_download = pdf_bytes
+                    st.session_state.giao_dich_data = giao_dich_data
                     
-                    # Nút download chỉ hiện sau khi đã submit thành công
-                    st.download_button(
-                        "Tải bản kê PDF (Mẫu 01/TNDN)",
-                        data=pdf_bytes,
-                        file_name=f"bang_ke_{giao_dich_data['ho_va_ten']}.pdf",
-                        mime="application/pdf"
-                    )
+    # Hiển thị nút download nếu có dữ liệu PDF trong session_state
+    if st.session_state.pdf_for_download:
+        st.download_button(
+            "Tải bản kê PDF (Mẫu 01/TNDN)",
+            data=st.session_state.pdf_for_download,
+            file_name=f"bang_ke_{st.session_state.giao_dich_data['ho_va_ten']}.pdf",
+            mime="application/pdf"
+        )
 
     st.markdown("---")
     # Nút làm mới trang để xóa dữ liệu form cũ và bắt đầu giao dịch mới
@@ -392,6 +398,7 @@ def create_new_transaction_page():
         st.session_state.so_cccd = ""
         st.session_state.que_quan = ""
         st.session_state.so_luong = ""
+        st.session_state.pdf_for_download = None
         st.rerun()
 
 def history_and_stats_page():
