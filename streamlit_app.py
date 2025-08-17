@@ -251,7 +251,7 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     y -= 30*mm
     pdf.drawString(20*mm, y, f"Tổng cộng: {data['thanh_tien']:,.0f} VNĐ")
     y -= 5*mm
-    pdf.drawString(20*mm, y, f"Bằng chữ: {doc_so_thanh_chu(data['thanh_tien'])}")
+    pdf.drawString(20*mm, y, f"Tổng cộng bằng chữ: {doc_so_thanh_chu(data['thanh_tien'])}")
     
     pdf.save()
     buffer.seek(0)
