@@ -12,10 +12,10 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.units import mm
 import re
 import os
 import matplotlib.pyplot as plt
-import io
 
 # --- Khởi tạo OCR ---
 @st.cache_resource
@@ -70,7 +70,11 @@ def doc_so_thanh_chu(number):
         elif chuc > 1:
             chuoi += chu_so[chuc] + " mươi "
         
-        if don_vi_le > 0:
+        if don_vi_le == 5 and chuc != 0:
+            chuoi += "lăm"
+        elif don_vi_le == 1 and chuc != 0 and chuc != 1:
+            chuoi += "mốt"
+        elif don_vi_le > 0:
             chuoi += chu_so[don_vi_le]
         
         return chuoi.strip()
@@ -176,45 +180,62 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
         st.error(f"Lỗi: Dữ liệu nhập không hợp lệ. {e}")
         return None
 
-# --- Hàm tạo PDF ---
+# --- Hàm tạo PDF theo mẫu 01/TNDN ---
 try:
     pdfmetrics.registerFont(TTFont('TimesNewRoman', 'Times New Roman.ttf'))
 except:
     st.warning("Không tìm thấy font 'Times New Roman.ttf'. PDF có thể hiển thị lỗi font.")
     pdfmetrics.registerFont(TTFont('Vera', 'Vera.ttf'))
 
-def tao_pdf(data):
+def tao_pdf_mau_01(data):
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     pdf.setFont("TimesNewRoman", 12)
 
-    pdf.drawCentredString(width/2, height-50, "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM")
-    pdf.drawCentredString(width/2, height-70, "Độc lập - Tự do - Hạnh phúc")
-    pdf.drawCentredString(width/2, height-90, "BẢNG KÊ THU MUA HÀNG HÓA, DỊCH VỤ MUA VÀO")
+    # Tiêu đề
+    pdf.drawCentredString(width/2, height - 20*mm, "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM")
+    pdf.drawCentredString(width/2, height - 25*mm, "Độc lập - Tự do - Hạnh phúc")
+    pdf.drawCentredString(width/2, height - 30*mm, "--------------------------")
+    pdf.drawRightString(width - 20*mm, height - 35*mm, "Mẫu số: 01/TNDN")
     
-    pdf.drawString(50, height-130, f"Họ và tên: {data['ho_va_ten']}")
-    pdf.drawString(50, height-150, f"Số CCCD: {data['so_cccd']}")
-    pdf.drawString(50, height-170, f"Quê quán: {data['que_quan']}")
+    pdf.setFont("TimesNewRoman", 14)
+    pdf.drawCentredString(width/2, height - 50*mm, "BẢNG KÊ THU MUA HÀNG HÓA, DỊCH VỤ")
+    pdf.drawCentredString(width/2, height - 55*mm, "KHÔNG CÓ HÓA ĐƠN")
+    pdf.setFont("TimesNewRoman", 12)
+
+    # Thông tin chung
+    pdf.drawString(20*mm, height - 70*mm, f"Họ và tên người bán: {data['ho_va_ten']}")
+    pdf.drawString(20*mm, height - 75*mm, f"Số CCCD: {data['so_cccd']}")
+    pdf.drawString(20*mm, height - 80*mm, f"Quê quán: {data['que_quan']}")
+    pdf.drawString(20*mm, height - 85*mm, f"Ngày lập: {data['ngay_tao']}")
+
+    # Bảng chi tiết
+    y = height - 100*mm
+    pdf.rect(20*mm, y-20*mm, 170*mm, 20*mm) # Khung bảng
     
-    y = height-210
-    pdf.drawString(50, y, "STT")
-    pdf.drawString(100, y, "Tên hàng/dịch vụ")
-    pdf.drawString(300, y, "Số lượng")
-    pdf.drawString(380, y, "Đơn giá")
-    pdf.drawString(480, y, "Thành tiền")
-    y -= 20
-    pdf.drawString(50, y, "1")
-    pdf.drawString(100, y, "Hàng hóa")
-    pdf.drawString(300, y, str(data['so_luong']))
-    pdf.drawString(380, y, f"{data['don_gia']:,.0f}")
-    pdf.drawString(480, y, f"{data['thanh_tien']:,.0f}")
+    # Header
+    pdf.drawString(22*mm, y - 5*mm, "STT")
+    pdf.drawString(35*mm, y - 5*mm, "Tên hàng hóa, dịch vụ")
+    pdf.drawString(100*mm, y - 5*mm, "Đơn vị tính")
+    pdf.drawString(120*mm, y - 5*mm, "Số lượng")
+    pdf.drawString(140*mm, y - 5*mm, "Đơn giá")
+    pdf.drawString(170*mm, y - 5*mm, "Thành tiền")
 
-    y -= 40
-    pdf.drawString(50, y, f"Tổng cộng: {data['thanh_tien']:,.0f} VNĐ")
-    y -= 20
-    pdf.drawString(50, y, f"Bằng chữ: {doc_so_thanh_chu(data['thanh_tien'])}")
+    # Dòng dữ liệu
+    pdf.drawString(22*mm, y - 15*mm, "1")
+    pdf.drawString(35*mm, y - 15*mm, "Hàng hóa")
+    pdf.drawString(100*mm, y - 15*mm, "chỉ")
+    pdf.drawString(120*mm, y - 15*mm, f"{data['so_luong']:,.2f}")
+    pdf.drawString(140*mm, y - 15*mm, f"{data['don_gia']:,.0f}")
+    pdf.drawString(170*mm, y - 15*mm, f"{data['thanh_tien']:,.0f}")
 
+    # Tổng cộng
+    y -= 30*mm
+    pdf.drawString(20*mm, y, f"Tổng cộng: {data['thanh_tien']:,.0f} VNĐ")
+    y -= 5*mm
+    pdf.drawString(20*mm, y, f"Bằng chữ: {doc_so_thanh_chu(data['thanh_tien'])}")
+    
     pdf.save()
     buffer.seek(0)
     return buffer
@@ -234,6 +255,7 @@ def main_app():
         history_and_stats_page()
 
 def create_new_transaction_page():
+    # Khởi tạo session state để giữ lại dữ liệu
     if 'ho_ten' not in st.session_state:
         st.session_state.ho_ten = ""
     if 'so_cccd' not in st.session_state:
@@ -308,10 +330,10 @@ def create_new_transaction_page():
                     st.metric(label="Thành Tiền", value=f"{giao_dich_data['thanh_tien']:,.0f} VNĐ")
                     st.write(f"Bằng chữ: {doc_so_thanh_chu(giao_dich_data['thanh_tien'])}")
                     
-                    pdf_bytes = tao_pdf(giao_dich_data)
+                    pdf_bytes = tao_pdf_mau_01(giao_dich_data)
                     with col_download:
                         st.download_button(
-                            "Tải bản kê PDF",
+                            "Tải bản kê PDF (Mẫu 01/TNDN)",
                             data=pdf_bytes,
                             file_name=f"bang_ke_{giao_dich_data['ho_va_ten']}.pdf",
                             mime="application/pdf"
