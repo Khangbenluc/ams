@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import pandas as pd
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 from paddleocr import PaddleOCR
 from io import BytesIO
@@ -14,8 +14,6 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import re
 import os
-import bcrypt
-import time
 import matplotlib.pyplot as plt
 import io
 
@@ -28,20 +26,10 @@ def get_reader():
 ocr = get_reader()
 
 # --- Kết nối SQLite ---
-conn = sqlite3.connect("ams.db", check_same_thread=False)
+conn = sqlite3.connect("lich_su_giao_dich.db", check_same_thread=False)
 c = conn.cursor()
 
-# Tạo bảng người dùng nếu chưa tồn tại
-c.execute('''
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL
-)
-''')
-conn.commit()
-
-# Tạo bảng lịch sử giao dịch
+# Tạo bảng lịch sử giao dịch nếu chưa tồn tại
 c.execute('''
 CREATE TABLE IF NOT EXISTS lich_su (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -51,30 +39,10 @@ CREATE TABLE IF NOT EXISTS lich_su (
     que_quan TEXT,
     khoi_luong REAL,
     don_gia REAL,
-    thanh_tien REAL,
-    nguoi_nhap TEXT
+    thanh_tien REAL
 )
 ''')
 conn.commit()
-
-# --- Chức năng Quản lý người dùng ---
-def create_user(username, password):
-    """Tạo người dùng mới và mã hóa mật khẩu."""
-    password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    try:
-        c.execute("INSERT INTO users (username, password_hash) VALUES (?, ?)", (username, password_hash))
-        conn.commit()
-        return True
-    except sqlite3.IntegrityError:
-        return False
-
-def check_user(username, password):
-    """Kiểm tra thông tin đăng nhập."""
-    c.execute("SELECT password_hash FROM users WHERE username = ?", (username,))
-    result = c.fetchone()
-    if result:
-        return bcrypt.checkpw(password.encode('utf-8'), result[0])
-    return False
 
 # --- Chuyển số sang chữ ---
 def doc_so_thanh_chu(number):
@@ -130,16 +98,9 @@ def doc_so_thanh_chu(number):
 def preprocess_image(img_bytes):
     """Tiền xử lý ảnh để cải thiện chất lượng OCR."""
     img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
-    
-    # Chuyển sang ảnh xám
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    # Làm mờ để giảm nhiễu
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    
-    # Cân bằng histogram để tăng độ tương phản
     equalized = cv2.equalizeHist(blurred)
-    
     return equalized
 
 # --- Hàm OCR CCCD ---
@@ -186,7 +147,7 @@ def trich_xuat_can(image_bytes):
         return ""
 
 # --- Hàm tính tiền và lưu SQLite ---
-def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str, nguoi_nhap):
+def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
     try:
         so_luong = float(so_luong_str.replace(',', ''))
         don_gia = float(don_gia_str.replace(',', ''))
@@ -197,9 +158,9 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str, ngu
         thoi_gian_luu = current_time.strftime("%Y-%m-%d %H:%M:%S")
 
         c.execute('''
-            INSERT INTO lich_su (thoi_gian, ho_va_ten, so_cccd, que_quan, khoi_luong, don_gia, thanh_tien, nguoi_nhap)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (thoi_gian_luu, ho_va_ten, so_cccd, que_quan, so_luong, don_gia, thanh_tien, nguoi_nhap))
+            INSERT INTO lich_su (thoi_gian, ho_va_ten, so_cccd, que_quan, khoi_luong, don_gia, thanh_tien)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (thoi_gian_luu, ho_va_ten, so_cccd, que_quan, so_luong, don_gia, thanh_tien))
         conn.commit()
 
         return {
@@ -218,8 +179,9 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str, ngu
 # --- Hàm tạo PDF ---
 try:
     pdfmetrics.registerFont(TTFont('TimesNewRoman', 'Times New Roman.ttf'))
-except Exception as e:
+except:
     st.warning("Không tìm thấy font 'Times New Roman.ttf'. PDF có thể hiển thị lỗi font.")
+    pdfmetrics.registerFont(TTFont('Vera', 'Vera.ttf'))
 
 def tao_pdf(data):
     buffer = BytesIO()
@@ -263,17 +225,12 @@ def main_app():
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
 
-    st.sidebar.header("Tùy chọn")
-    page = st.sidebar.radio("Chọn trang", ["Tạo giao dịch mới", "Lịch sử & Thống kê"])
-    st.sidebar.markdown("---")
-    st.sidebar.text(f"Người dùng: {st.session_state.username}")
-    if st.sidebar.button("Đăng xuất"):
-        st.session_state.logged_in = False
-        st.experimental_rerun()
+    tab1, tab2 = st.tabs(["Tạo giao dịch", "Lịch sử & Thống kê"])
 
-    if page == "Tạo giao dịch mới":
+    with tab1:
         create_new_transaction_page()
-    elif page == "Lịch sử & Thống kê":
+
+    with tab2:
         history_and_stats_page()
 
 def create_new_transaction_page():
@@ -294,9 +251,16 @@ def create_new_transaction_page():
         anh_cccd = st.camera_input("Chụp ảnh CCCD")
         uploaded_cccd = st.file_uploader("Hoặc tải ảnh CCCD", type=["jpg", "jpeg", "png"], key="cccd_uploader")
         
-        if anh_cccd or uploaded_cccd:
+        if anh_cccd:
             with st.spinner('Đang xử lý OCR...'):
-                ho_ten, so_cccd, que_quan = trich_xuat_cccd(anh_cccd or uploaded_cccd)
+                ho_ten, so_cccd, que_quan = trich_xuat_cccd(anh_cccd.read())
+                st.session_state.ho_ten = ho_ten
+                st.session_state.so_cccd = so_cccd
+                st.session_state.que_quan = que_quan
+            st.success("Trích xuất thành công!")
+        elif uploaded_cccd:
+            with st.spinner('Đang xử lý OCR...'):
+                ho_ten, so_cccd, que_quan = trich_xuat_cccd(uploaded_cccd.read())
                 st.session_state.ho_ten = ho_ten
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
@@ -307,9 +271,14 @@ def create_new_transaction_page():
         anh_can = st.camera_input("Chụp ảnh màn hình cân")
         uploaded_can = st.file_uploader("Hoặc tải ảnh cân", type=["jpg", "jpeg", "png"], key="can_uploader")
         
-        if anh_can or uploaded_can:
+        if anh_can:
             with st.spinner('Đang xử lý OCR...'):
-                so_luong = trich_xuat_can(anh_can or uploaded_can)
+                so_luong = trich_xuat_can(anh_can.read())
+                st.session_state.so_luong = so_luong
+            st.success("Trích xuất thành công!")
+        elif uploaded_can:
+            with st.spinner('Đang xử lý OCR...'):
+                so_luong = trich_xuat_can(uploaded_can.read())
                 st.session_state.so_luong = so_luong
             st.success("Trích xuất thành công!")
 
@@ -331,7 +300,7 @@ def create_new_transaction_page():
             if not ho_ten_input or not so_luong_input or not don_gia_input:
                 st.error("Vui lòng nhập đầy đủ thông tin.")
             else:
-                giao_dich_data = xu_ly_giao_dich(ho_ten_input, so_cccd_input, que_quan_input, so_luong_input, don_gia_input, st.session_state.username)
+                giao_dich_data = xu_ly_giao_dich(ho_ten_input, so_cccd_input, que_quan_input, so_luong_input, don_gia_input)
                 if giao_dich_data:
                     st.success("Giao dịch đã được lưu thành công!")
                     st.session_state['last_giao_dich'] = giao_dich_data
@@ -348,6 +317,8 @@ def create_new_transaction_page():
                             mime="application/pdf"
                         )
     st.markdown("---")
+    if st.button("Làm mới trang"):
+        st.experimental_rerun()
 
 def history_and_stats_page():
     st.header("Lịch sử và Thống kê 📈")
@@ -360,17 +331,13 @@ def history_and_stats_page():
 
     # --- Bộ lọc ---
     st.subheader("Bộ lọc")
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
     with col1:
-        nguoi_nhap_filter = st.selectbox("Lọc theo người nhập", options=["Tất cả"] + list(df['nguoi_nhap'].unique()))
-    with col2:
         ho_ten_search = st.text_input("Tìm kiếm theo tên khách hàng")
-    with col3:
+    with col2:
         cccd_search = st.text_input("Tìm kiếm theo CCCD")
         
     df_filtered = df.copy()
-    if nguoi_nhap_filter != "Tất cả":
-        df_filtered = df_filtered[df_filtered['nguoi_nhap'] == nguoi_nhap_filter]
     if ho_ten_search:
         df_filtered = df_filtered[df_filtered['ho_va_ten'].str.contains(ho_ten_search, case=False, na=False)]
     if cccd_search:
@@ -401,10 +368,11 @@ def history_and_stats_page():
     daily_revenue = df_filtered.groupby('ngay')['thanh_tien'].sum()
     
     fig, ax = plt.subplots()
-    ax.bar(daily_revenue.index, daily_revenue.values)
+    ax.bar(daily_revenue.index.astype(str), daily_revenue.values)
     ax.set_title("Doanh thu hàng ngày")
     ax.set_ylabel("Thành tiền (VNĐ)")
-    ax.tick_params(axis='x', rotation=45)
+    ax.tick_params(axis='x', rotation=45, labelsize=8)
+    plt.tight_layout()
     st.pyplot(fig)
     
     st.markdown("---")
@@ -422,39 +390,6 @@ def history_and_stats_page():
         mime='text/csv'
     )
 
-# --- Trang đăng nhập ---
-def login_page():
-    st.title("Đăng nhập 🔑")
-    st.markdown("---")
-    
-    username = st.text_input("Tên đăng nhập")
-    password = st.text_input("Mật khẩu", type="password")
-    
-    col_login, col_register = st.columns(2)
-    with col_login:
-        if st.button("Đăng nhập"):
-            if check_user(username, password):
-                st.session_state.logged_in = True
-                st.session_state.username = username
-                st.success(f"Đăng nhập thành công, chào mừng {username}!")
-                time.sleep(1)
-                st.experimental_rerun()
-            else:
-                st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
-    
-    with col_register:
-        if st.button("Đăng ký"):
-            if create_user(username, password):
-                st.success("Đăng ký thành công! Vui lòng đăng nhập.")
-            else:
-                st.error("Tên đăng nhập đã tồn tại.")
-
 # --- Chạy ứng dụng ---
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.username = ""
-
-if st.session_state.logged_in:
+if __name__ == "__main__":
     main_app()
-else:
-    login_page()
