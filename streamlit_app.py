@@ -108,6 +108,11 @@ def doc_so_thanh_chu(number):
 def preprocess_image(img_bytes):
     """Tiền xử lý ảnh để cải thiện chất lượng OCR."""
     img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+    # Thêm kiểm tra này để xử lý lỗi "Tensor holds no memory"
+    if img is None:
+        st.error("Không thể đọc được hình ảnh. Vui lòng thử lại với file khác.")
+        return np.zeros((10, 10), dtype=np.uint8) # Trả về một tensor rỗng nhưng hợp lệ
+        
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5, 5), 0)
     equalized = cv2.equalizeHist(blurred)
@@ -121,7 +126,6 @@ def trich_xuat_cccd(image_bytes):
             return ho_ten, so_cccd, que_quan
         
         preprocessed_img = preprocess_image(image_bytes)
-        # Sử dụng .ocr() và xử lý kết quả một cách an toàn
         result = ocr.ocr(preprocessed_img) 
         
         if result and result[0]:
@@ -146,7 +150,6 @@ def trich_xuat_can(image_bytes):
             return ""
         
         preprocessed_img = preprocess_image(image_bytes)
-        # Sử dụng .ocr() và xử lý kết quả một cách an toàn
         result = ocr.ocr(preprocessed_img)
         
         if result and result[0]:
