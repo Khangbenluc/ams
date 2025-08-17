@@ -107,37 +107,63 @@ def doc_so_thanh_chu(number):
 # --- Tiền xử lý ảnh cho OCR ---
 def preprocess_image(img_bytes):
     """Tiền xử lý ảnh để cải thiện chất lượng OCR."""
-    img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
-    # Thêm kiểm tra này để xử lý lỗi "Tensor holds no memory"
-    if img is None:
-        st.error("Không thể đọc được hình ảnh. Vui lòng thử lại với file khác.")
-        return np.zeros((10, 10), dtype=np.uint8) # Trả về một tensor rỗng nhưng hợp lệ
-        
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5, 5), 0)
-    equalized = cv2.equalizeHist(blurred)
-    return equalized
-
-# --- Hàm OCR CCCD ---
-def trich_xuat_cccd(image_bytes):
     try:
-        ho_ten, so_cccd, que_quan = "", "", ""
+        img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
+        if img is None:
+            st.error("Không thể đọc được hình ảnh. Vui lòng thử lại với file khác.")
+            return np.zeros((10, 10), dtype=np.uint8)
+        
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        equalized = cv2.equalizeHist(blurred)
+        return equalized
+    except Exception as e:
+        st.error(f"Lỗi khi tiền xử lý ảnh: {e}")
+        return np.zeros((10, 10), dtype=np.uint8)
+
+# --- Hàm OCR CCCD (đã sửa lỗi) ---
+def trich_xuat_cccd(image_bytes):
+    ho_ten, so_cccd, que_quan = "", "", ""
+    try:
         if image_bytes is None: 
             return ho_ten, so_cccd, que_quan
         
         preprocessed_img = preprocess_image(image_bytes)
         result = ocr.ocr(preprocessed_img) 
         
-        if result and result[0]:
-            for idx, line in enumerate(result[0]):
-                text = line[1][0].upper()
-                # Thêm kiểm tra 'and idx + 1 < len(result[0])' để đảm bảo index không bị lỗi
-                if "HỌ VÀ TÊN" in text and idx + 1 < len(result[0]):
-                    ho_ten = result[0][idx + 1][1][0]
-                elif "SỐ" in text and len(text.split()[-1]) == 12 and text.split()[-1].isdigit():
-                    so_cccd = text.split()[-1]
-                elif "QUÊ QUÁN" in text and idx + 1 < len(result[0]):
-                    que_quan = result[0][idx + 1][1][0]
+        if not result or not result[0]:
+            return ho_ten, so_cccd, que_quan
+            
+        # Nối tất cả các dòng text đã được OCR thành một chuỗi lớn để dễ tìm kiếm
+        all_text = [line[1][0].upper() for line in result[0]]
+
+        # Tìm kiếm Họ và Tên
+        ho_ten_found = False
+        for i, text in enumerate(all_text):
+            if "HỌ VÀ TÊN" in text:
+                # Lấy dòng tiếp theo và kiểm tra
+                if i + 1 < len(all_text):
+                    ho_ten = all_text[i + 1]
+                    ho_ten_found = True
+                break
+
+        # Tìm kiếm Số CCCD
+        so_cccd_pattern = re.compile(r'\d{12}')
+        for text in all_text:
+            match = so_cccd_pattern.search(text.replace(" ", ""))
+            if match:
+                so_cccd = match.group(0)
+                break
+        
+        # Tìm kiếm Quê quán
+        que_quan_found = False
+        for i, text in enumerate(all_text):
+            if "QUÊ QUÁN" in text:
+                if i + 1 < len(all_text):
+                    que_quan = all_text[i + 1]
+                    que_quan_found = True
+                break
+
         return ho_ten, so_cccd, que_quan
     except Exception as e:
         st.error(f"Lỗi khi xử lý OCR: {e}")
