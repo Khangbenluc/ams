@@ -404,14 +404,14 @@ def create_new_transaction_page():
                 if so_luong:
                     st.session_state.so_luong = so_luong
             st.success("Đã trích xuất khối lượng!")
-            st.image(anh_can, use_column_width=True)
+            st.image(anh_can, use_container_width=True)
         elif uploaded_can:
             with st.spinner("Đang xử lý OCR cân..."):
                 so_luong = trich_xuat_can(uploaded_can.read())
                 if so_luong:
                     st.session_state.so_luong = so_luong
             st.success("Đã trích xuất khối lượng!")
-            st.image(uploaded_can, use_column_width=True)
+            st.image(uploaded_can, use_container_width=True)
 
     st.markdown("---")
     st.subheader("2. Nhập đơn giá và lưu giao dịch 📝")
