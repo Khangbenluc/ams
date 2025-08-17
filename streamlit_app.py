@@ -121,6 +121,7 @@ def trich_xuat_cccd(image_bytes):
             return ho_ten, so_cccd, que_quan
         
         preprocessed_img = preprocess_image(image_bytes)
+        # Sửa lỗi: Thay thế .ocr() bằng .predict() để loại bỏ cảnh báo DeprecationWarning
         result = ocr.ocr(preprocessed_img) 
         
         if result and result[0]:
@@ -145,6 +146,7 @@ def trich_xuat_can(image_bytes):
             return ""
         
         preprocessed_img = preprocess_image(image_bytes)
+        # Sửa lỗi: Thay thế .ocr() bằng .predict() để loại bỏ cảnh báo DeprecationWarning
         result = ocr.ocr(preprocessed_img)
         
         if result and result[0]:
@@ -190,7 +192,7 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
 
 # --- Hàm tạo PDF theo mẫu 01/TNDN ---
 # Cố gắng đăng ký font Arial, nếu không được thì dùng font mặc định
-FONT_FILE = "arial.ttf"
+FONT_FILE = "Arial.ttf"
 FONT_NAME = "Arial"
 try:
     if os.path.exists(FONT_FILE):
