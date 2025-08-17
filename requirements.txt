@@ -1,7 +1,7 @@
 streamlit
-opencv-python-headless
+opencv-python
+numpy
+pandas
 paddleocr
 paddlepaddle
 pytz
-pandas
-numpy
