@@ -1,6 +1,6 @@
 streamlit
-paddleocr
-paddlepaddle
+pytesseract
+Pillow
 opencv-python
 numpy
 pandas
