@@ -121,7 +121,7 @@ def trich_xuat_cccd(image_bytes):
             return ho_ten, so_cccd, que_quan
         
         preprocessed_img = preprocess_image(image_bytes)
-        # Sửa lỗi: Thay thế .ocr() bằng .predict() để loại bỏ cảnh báo DeprecationWarning
+        # Sử dụng .ocr() và xử lý kết quả một cách an toàn
         result = ocr.ocr(preprocessed_img) 
         
         if result and result[0]:
@@ -146,7 +146,7 @@ def trich_xuat_can(image_bytes):
             return ""
         
         preprocessed_img = preprocess_image(image_bytes)
-        # Sửa lỗi: Thay thế .ocr() bằng .predict() để loại bỏ cảnh báo DeprecationWarning
+        # Sử dụng .ocr() và xử lý kết quả một cách an toàn
         result = ocr.ocr(preprocessed_img)
         
         if result and result[0]:
@@ -340,7 +340,7 @@ def create_new_transaction_page():
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
             st.success("Trích xuất thành công! Dữ liệu đã được điền vào form.")
-            st.rerun() # Thêm lệnh này để làm mới giao diện ngay lập tức
+            # Loại bỏ st.rerun() để tránh vòng lặp
         elif uploaded_cccd:
             with st.spinner('Đang xử lý OCR...'):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(uploaded_cccd.read())
@@ -349,7 +349,7 @@ def create_new_transaction_page():
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
             st.success("Trích xuất thành công! Dữ liệu đã được điền vào form.")
-            st.rerun() # Thêm lệnh này để làm mới giao diện ngay lập tức
+            # Loại bỏ st.rerun() để tránh vòng lặp
     
     with col_can:
         st.subheader("Chụp ảnh hoặc tải ảnh cân")
@@ -363,14 +363,14 @@ def create_new_transaction_page():
                 # Cập nhật session_state để điền vào ô nhập liệu
                 st.session_state.so_luong = so_luong
             st.success("Trích xuất thành công! Khối lượng đã được điền vào form.")
-            st.rerun() # Thêm lệnh này để làm mới giao diện ngay lập tức
+            # Loại bỏ st.rerun() để tránh vòng lặp
         elif uploaded_can:
             with st.spinner('Đang xử lý OCR...'):
                 so_luong = trich_xuat_can(uploaded_can.read())
                 # Cập nhật session_state để điền vào ô nhập liệu
                 st.session_state.so_luong = so_luong
             st.success("Trích xuất thành công! Khối lượng đã được điền vào form.")
-            st.rerun() # Thêm lệnh này để làm mới giao diện ngay lập tức
+            # Loại bỏ st.rerun() để tránh vòng lặp
 
     st.markdown("---")
 
