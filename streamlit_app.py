@@ -132,36 +132,34 @@ def trich_xuat_cccd(image_bytes):
         if preprocessed_img is None:
             return ho_ten, so_cccd, que_quan
 
-        result = ocr.ocr(preprocessed_img) 
-        
-        # Kiểm tra tổng thể kết quả OCR
+        result = ocr.ocr(preprocessed_img)
+
         if not result or not result[0]:
             return ho_ten, so_cccd, que_quan
-            
+
         all_text = []
         for line in result[0]:
-            # Thêm kiểm tra ở đây để tránh lỗi index
-            # line phải là list, có ít nhất 2 phần tử, và phần tử thứ 2 (line[1]) phải là một tuple/list có ít nhất 1 phần tử
-            if isinstance(line, list) and len(line) > 1 and isinstance(line[1], (tuple, list)) and len(line[1]) > 0:
+            # line[1] = (text, confidence)
+            if line and isinstance(line[1], tuple):
                 text = line[1][0].upper()
                 all_text.append(text)
-        
-        # Tìm kiếm Họ và Tên
+
+        # Tìm Họ và Tên
         for i, text in enumerate(all_text):
             if "HỌ VÀ TÊN" in text:
                 if i + 1 < len(all_text):
                     ho_ten = all_text[i + 1]
                 break
 
-        # Tìm kiếm Số CCCD
+        # Tìm số CCCD (12 số)
         so_cccd_pattern = re.compile(r'\d{12}')
         for text in all_text:
             match = so_cccd_pattern.search(text.replace(" ", ""))
             if match:
                 so_cccd = match.group(0)
                 break
-        
-        # Tìm kiếm Quê quán
+
+        # Tìm Quê quán
         for i, text in enumerate(all_text):
             if "QUÊ QUÁN" in text:
                 if i + 1 < len(all_text):
@@ -170,8 +168,9 @@ def trich_xuat_cccd(image_bytes):
 
         return ho_ten, so_cccd, que_quan
     except Exception as e:
-        st.error(f"Lỗi khi xử lý OCR: {e}")
+        st.error(f"Lỗi khi xử lý OCR CCCD: {e}")
         return "", "", ""
+
 
 # --- Hàm OCR cân ---
 def trich_xuat_can(image_bytes):
@@ -184,12 +183,12 @@ def trich_xuat_can(image_bytes):
             return ""
 
         result = ocr.ocr(preprocessed_img)
-        
+
         if result and result[0]:
             for line in result[0]:
-                if isinstance(line, list) and len(line) > 1 and isinstance(line[1], (tuple, list)) and len(line[1]) > 0:
+                if line and isinstance(line[1], tuple):
                     text = line[1][0]
-                    # Chỉ lấy số và dấu chấm
+                    # Lọc chỉ lấy số và dấu chấm
                     cleaned_text = ''.join(c for c in text if c.isdigit() or c == '.')
                     if cleaned_text:
                         return cleaned_text
@@ -197,6 +196,7 @@ def trich_xuat_can(image_bytes):
     except Exception as e:
         st.error(f"Lỗi khi xử lý OCR cân: {e}")
         return ""
+
 
 # --- Hàm tính tiền và lưu SQLite ---
 def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
