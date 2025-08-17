@@ -418,4 +418,191 @@ def create_new_transaction_page():
             if so_luong:
                 st.session_state.so_luong = so_luong
             st.success("Đã trích xuất khối lượng!")
-            st.image(anh_can, use_contai
+            st.image(anh_can, use_container_width=True)
+        elif uploaded_can:
+            with st.spinner("Đang xử lý OCR cân..."):
+                so_luong = trich_xuat_can_easy(uploaded_can.read())
+            if so_luong:
+                st.session_state.so_luong = so_luong
+            st.success("Đã trích xuất khối lượng!")
+            st.image(uploaded_can, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("2. Nhập đơn giá và lưu giao dịch 📝")
+
+    # Hiển thị tóm tắt (thông tin sẵn có)
+    st.info(f"Họ và Tên: **{st.session_state.ho_ten}**")
+    st.info(f"Số CCCD: **{st.session_state.so_cccd}**")
+    st.info(f"Quê quán: **{st.session_state.que_quan}**")
+    st.info(f"Khối lượng: **{st.session_state.so_luong}** chỉ")
+
+    st.write("**(Nếu OCR đã trích xuất được, ô tương ứng sẽ bị khóa — không thể nhập lại. Nếu chưa có, bạn có thể nhập thủ công.)**")
+
+    # Họ tên => khóa nếu OCR có, else cho nhập
+    if st.session_state.get("ho_ten"):
+        st.text_input("Họ và tên người bán", value=st.session_state.ho_ten, disabled=True, key="ho_ten_disabled")
+    else:
+        st.text_input("Họ và tên người bán", key="ho_ten")
+
+    # Số CCCD
+    if st.session_state.get("so_cccd"):
+        st.text_input("Số CCCD", value=st.session_state.so_cccd, disabled=True, key="so_cccd_disabled")
+    else:
+        st.text_input("Số CCCD", key="so_cccd")
+
+    # Quê quán
+    if st.session_state.get("que_quan"):
+        st.text_area("Quê quán", value=st.session_state.que_quan, disabled=True, key="que_quan_disabled")
+    else:
+        st.text_area("Quê quán", key="que_quan")
+
+    # Khối lượng (chỉ)
+    if st.session_state.get("so_luong"):
+        st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong, disabled=True, key="so_luong_disabled")
+    else:
+        st.text_input("Khối lượng (chỉ)", key="so_luong")
+
+    # Don gia and ten don vi luôn để nhập (người dùng cung cấp)
+    st.text_input("Đơn giá (VNĐ/chỉ)", key="don_gia_input")
+    st.text_input("Tên đơn vị (không bắt buộc)", key="ten_don_vi")
+
+    # Khi lưu: lấy value ưu tiên từ các key editable (nếu có), else từ disabled key
+    def _get_value(field):
+        if st.session_state.get(field):
+            return st.session_state.get(field)
+        disabled_key = field + "_disabled"
+        return st.session_state.get(disabled_key, "")
+
+    if st.button("Lưu giao dịch"):
+        ho_va_ten = _get_value("ho_ten")
+        so_cccd_val = _get_value("so_cccd")
+        que_quan_val = _get_value("que_quan")
+        so_luong_val = _get_value("so_luong")
+        don_gia_val = st.session_state.get("don_gia_input", "")
+
+        if not ho_va_ten or not so_luong_val or not don_gia_val:
+            st.error("Vui lòng đảm bảo đã trích xuất/nhập Họ tên, Khối lượng và nhập đơn giá trước khi lưu.")
+        else:
+            giao_dich_data = xu_ly_giao_dich(ho_va_ten, so_cccd_val, que_quan_val, so_luong_val, don_gia_val)
+            if giao_dich_data:
+                st.success("Giao dịch đã được lưu thành công!")
+                st.metric(label="Thành Tiền", value=f"{giao_dich_data['thanh_tien']:,.0f} VNĐ")
+                st.write(f"Bằng chữ: {doc_so_thanh_chu(giao_dich_data['thanh_tien'])}")
+
+                pdf_buffer = tao_pdf_mau_01(giao_dich_data, st.session_state.get("ten_don_vi", ""))
+                st.session_state.pdf_for_download = pdf_buffer
+                st.session_state.giao_dich_data = giao_dich_data
+
+    # Hiển thị download PDF nếu có
+    if st.session_state.pdf_for_download:
+        st.download_button(
+            "Tải bản kê PDF (Mẫu 01/TNDN)",
+            data=st.session_state.pdf_for_download.getvalue(),
+            file_name=f"bang_ke_{(st.session_state.giao_dich_data['ho_va_ten']).replace(' ', '_')}.pdf",
+            mime="application/pdf"
+        )
+
+    st.markdown("---")
+    if st.button("Làm mới trang"):
+        # reset keys (giữ login)
+        for k in ["ho_ten", "so_cccd", "que_quan", "so_luong", "pdf_for_download", "giao_dich_data", "don_gia_input", "ten_don_vi",
+                    "ho_ten_disabled", "so_cccd_disabled", "que_quan_disabled", "so_luong_disabled"]:
+            if k in st.session_state:
+                del st.session_state[k]
+        st.experimental_rerun()
+
+def history_and_stats_page():
+    st.header("Lịch sử và Thống kê")
+    df = pd.read_sql_query("SELECT * FROM lich_su ORDER BY thoi_gian DESC", conn)
+    if df.empty:
+        st.info("Chưa có giao dịch nào được ghi lại.")
+        return
+
+    st.subheader("Bộ lọc")
+    col1, col2 = st.columns(2)
+    with col1:
+        ho_ten_search = st.text_input("Tìm kiếm theo tên khách hàng")
+    with col2:
+        cccd_search = st.text_input("Tìm kiếm theo CCCD")
+
+    df_filtered = df.copy()
+    if ho_ten_search:
+        df_filtered = df_filtered[df_filtered['ho_va_ten'].str.contains(ho_ten_search, case=False, na=False)]
+    if cccd_search:
+        df_filtered = df_filtered[df_filtered['so_cccd'].str.contains(cccd_search, case=False, na=False)]
+
+    st.markdown("---")
+    st.subheader("Thống kê")
+    col_stats1, col_stats2, col_stats3 = st.columns(3)
+    with col_stats1:
+        tong_giao_dich = len(df_filtered)
+        st.metric("Tổng giao dịch", value=f"{tong_giao_dich}")
+    with col_stats2:
+        tong_thanh_tien = df_filtered['thanh_tien'].sum()
+        st.metric("Tổng thành tiền", value=f"{tong_thanh_tien:,.0f} VNĐ")
+    with col_stats3:
+        tong_khoi_luong = df_filtered['khoi_luong'].sum()
+        st.metric("Tổng khối lượng", value=f"{tong_khoi_luong} chỉ")
+
+    st.markdown("---")
+    st.subheader("Biểu đồ doanh thu")
+    df_filtered['thoi_gian'] = pd.to_datetime(df_filtered['thoi_gian'])
+    df_filtered['ngay'] = df_filtered['thoi_gian'].dt.date
+    daily_revenue = df_filtered.groupby('ngay')['thanh_tien'].sum()
+    fig, ax = plt.subplots()
+    ax.bar(daily_revenue.index.astype(str), daily_revenue.values)
+    ax.set_title("Doanh thu hàng ngày")
+    ax.set_ylabel("Thành tiền (VNĐ)")
+    ax.tick_params(axis='x', rotation=45, labelsize=8)
+    plt.tight_layout()
+    st.pyplot(fig)
+    st.markdown("---")
+    st.subheader("Lịch sử giao dịch")
+    st.dataframe(df_filtered)
+
+    # Cho phép chọn 1 dòng để edit hoặc xóa
+    st.markdown("**Chỉnh sửa / Xóa 1 bản ghi**")
+    ids = df_filtered['id'].astype(str).tolist()
+    chosen = st.selectbox("Chọn ID để chỉnh sửa/xóa", [""] + ids)
+    if chosen:
+        row = df_filtered[df_filtered['id'].astype(str) == chosen].iloc[0]
+        edit_col1, edit_col2 = st.columns(2)
+        with edit_col1:
+            e_name = st.text_input("Họ và tên", value=row['ho_va_ten'])
+        e_cccd = st.text_input("Số CCCD", value=row['so_cccd'])
+        e_qq = st.text_area("Quê quán", value=row['que_quan'])
+        with edit_col2:
+            e_khoi = st.text_input("Khối lượng (chỉ)", value=str(row['khoi_luong']))
+            e_dongia = st.text_input("Đơn giá (VNĐ/chỉ)", value=str(row['don_gia']))
+        if st.button("Cập nhật bản ghi"):
+            try:
+                c.execute('''
+                    UPDATE lich_su
+                    SET ho_va_ten=?, so_cccd=?, que_quan=?, khoi_luong=?, don_gia=?, thanh_tien=?
+                    WHERE id=?
+                ''', (e_name, e_cccd, e_qq, float(e_khoi), float(e_dongia), float(e_khoi)*float(e_dongia), int(chosen)))
+                conn.commit()
+                st.success("Cập nhật thành công.")
+                st.experimental_rerun()
+            except Exception as ex:
+                st.error(f"Lỗi cập nhật: {ex}")
+        if st.button("Xóa bản ghi"):
+            try:
+                c.execute('DELETE FROM lich_su WHERE id=?', (int(chosen),))
+                conn.commit()
+                st.success("Đã xóa bản ghi.")
+                st.experimental_rerun()
+            except Exception as ex:
+                st.error(f"Lỗi xóa: {ex}")
+
+    csv_file = df_filtered.to_csv(index=False)
+    st.download_button(label="Tải xuống CSV", data=csv_file, file_name='lich_su_giao_dich.csv', mime='text/csv')
+
+# --- Chạy ứng dụng ---
+if __name__ == "__main__":
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+    if st.session_state.logged_in:
+        main_app()
+    else:
+        login_page()
