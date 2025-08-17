@@ -286,6 +286,17 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     pdf.drawString(20*mm, y, f"Tổng cộng: {data['thanh_tien']:,.0f} VNĐ")
     y -= 5*mm
     pdf.drawString(20*mm, y, f"Bằng chữ: {doc_so_thanh_chu(data['thanh_tien'])}")
+    # --- Xuống cuối trang để thêm ngày tháng và chữ ký ---
+    pdf.setFont(FONT_NAME, 11)
+    pdf.drawRightString(width - 30*mm, 50*mm, "Hà Nội, ngày 17 tháng 08 năm 2025")
+
+    # Người mua (bên trái)
+    pdf.drawString(30*mm, 40*mm, "Người mua")
+    pdf.drawString(30*mm, 35*mm, "(Ký, ghi rõ họ tên)")
+
+    # Giám đốc (bên phải)
+    pdf.drawRightString(width - 30*mm, 40*mm, "Giám đốc")
+    pdf.drawRightString(width - 30*mm, 35*mm, "(Ký, đóng dấu)")
     pdf.save()
     buffer.seek(0)
     return buffer
