@@ -118,7 +118,7 @@ def trich_xuat_cccd(image_bytes):
     try:
         if image_bytes is None: return "", "", ""
         preprocessed_img = preprocess_image(image_bytes)
-        result = ocr.ocr(preprocessed_img, cls=False)
+        result = ocr.ocr(preprocessed_img) 
         
         ho_ten, so_cccd, que_quan = "", "", ""
         if result and result[0]:
@@ -144,7 +144,7 @@ def trich_xuat_can(image_bytes):
     try:
         if image_bytes is None: return ""
         preprocessed_img = preprocess_image(image_bytes)
-        result = ocr.ocr(preprocessed_img, cls=False)
+        result = ocr.ocr(preprocessed_img)
         if result and result[0]:
             for line in result[0]:
                 text = line[1][0]
@@ -188,7 +188,7 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
 
 # --- Hàm tạo PDF theo mẫu 01/TNDN ---
 # Cố gắng đăng ký font Arial, nếu không được thì dùng font mặc định
-FONT_FILE = "arial.ttf"
+FONT_FILE = "Arial.ttf"
 FONT_NAME = "Arial"
 try:
     if os.path.exists(FONT_FILE):
@@ -251,7 +251,7 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     y -= 30*mm
     pdf.drawString(20*mm, y, f"Tổng cộng: {data['thanh_tien']:,.0f} VNĐ")
     y -= 5*mm
-    pdf.drawString(20*mm, y, f"Tổng cộng bằng chữ: {doc_so_thanh_chu(data['thanh_tien'])}")
+    pdf.drawString(20*mm, y, f"Bằng chữ: {doc_so_thanh_chu(data['thanh_tien'])}")
     
     pdf.save()
     buffer.seek(0)
@@ -308,6 +308,7 @@ def main_app():
 
 def create_new_transaction_page():
     # Khởi tạo các giá trị trong session_state để lưu trữ trạng thái của form
+    # Điều này đảm bảo các biến tồn tại khi ứng dụng bắt đầu chạy
     if 'ho_ten' not in st.session_state:
         st.session_state.ho_ten = ""
     if 'so_cccd' not in st.session_state:
@@ -327,48 +328,55 @@ def create_new_transaction_page():
         anh_cccd = st.camera_input("Chụp ảnh CCCD")
         uploaded_cccd = st.file_uploader("Hoặc tải ảnh CCCD", type=["jpg", "jpeg", "png"], key="cccd_uploader")
         
+        # Logic trích xuất và lưu vào session state
         if anh_cccd:
             with st.spinner('Đang xử lý OCR...'):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(anh_cccd.read())
+                # Cập nhật session_state để điền vào các ô nhập liệu
                 st.session_state.ho_ten = ho_ten
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
-            st.success("Trích xuất thành công!")
+            st.success("Trích xuất thành công! Dữ liệu đã được điền vào form.")
         elif uploaded_cccd:
             with st.spinner('Đang xử lý OCR...'):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(uploaded_cccd.read())
+                # Cập nhật session_state để điền vào các ô nhập liệu
                 st.session_state.ho_ten = ho_ten
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
-            st.success("Trích xuất thành công!")
+            st.success("Trích xuất thành công! Dữ liệu đã được điền vào form.")
     
     with col_can:
         st.subheader("Chụp ảnh hoặc tải ảnh cân")
         anh_can = st.camera_input("Chụp ảnh màn hình cân")
         uploaded_can = st.file_uploader("Hoặc tải ảnh cân", type=["jpg", "jpeg", "png"], key="can_uploader")
         
+        # Logic trích xuất và lưu vào session state
         if anh_can:
             with st.spinner('Đang xử lý OCR...'):
                 so_luong = trich_xuat_can(anh_can.read())
+                # Cập nhật session_state để điền vào ô nhập liệu
                 st.session_state.so_luong = so_luong
-            st.success("Trích xuất thành công!")
+            st.success("Trích xuất thành công! Khối lượng đã được điền vào form.")
         elif uploaded_can:
             with st.spinner('Đang xử lý OCR...'):
                 so_luong = trich_xuat_can(uploaded_can.read())
+                # Cập nhật session_state để điền vào ô nhập liệu
                 st.session_state.so_luong = so_luong
-            st.success("Trích xuất thành công!")
+            st.success("Trích xuất thành công! Khối lượng đã được điền vào form.")
 
     st.markdown("---")
 
-    st.subheader("2. Tạo bản kê và lưu giao dịch �")
+    st.subheader("2. Tạo bản kê và lưu giao dịch 📝")
     with st.form("form_giao_dich"):
-        ho_ten_input = st.text_input("Họ và Tên", value=st.session_state.ho_ten)
-        so_cccd_input = st.text_input("Số Căn cước công dân", value=st.session_state.so_cccd)
-        que_quan_input = st.text_input("Quê quán", value=st.session_state.que_quan)
-        so_luong_input = st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong)
-        don_gia_input = st.text_input("Đơn giá (VNĐ/chỉ)")
+        # Các ô nhập liệu đọc giá trị từ st.session_state
+        ho_ten_input = st.text_input("Họ và Tên", value=st.session_state.ho_ten, key="ho_ten_key")
+        so_cccd_input = st.text_input("Số Căn cước công dân", value=st.session_state.so_cccd, key="cccd_key")
+        que_quan_input = st.text_input("Quê quán", value=st.session_state.que_quan, key="que_quan_key")
+        so_luong_input = st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong, key="so_luong_key")
+        don_gia_input = st.text_input("Đơn giá (VNĐ/chỉ)", key="don_gia_key")
         
-        ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)")
+        ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)", key="ten_don_vi_key")
         
         submitted = st.form_submit_button("Lưu giao dịch")
         
@@ -486,4 +494,3 @@ if __name__ == "__main__":
         main_app()
     else:
         login_page()
-
