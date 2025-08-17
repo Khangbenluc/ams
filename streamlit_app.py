@@ -9,6 +9,7 @@ import pytz
 from paddleocr import PaddleOCR
 from io import BytesIO
 from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
@@ -186,17 +187,20 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
         return None
 
 # --- Hàm tạo PDF theo mẫu 01/TNDN ---
+# Cố gắng đăng ký font Times New Roman, nếu không được thì dùng font Vera
 try:
     pdfmetrics.registerFont(TTFont('TimesNewRoman', 'Times New Roman.ttf'))
+    FONT_NAME = 'TimesNewRoman'
 except:
-    st.warning("Không tìm thấy font 'Times New Roman.ttf'. PDF có thể hiển thị lỗi font.")
+    st.warning("Không tìm thấy font 'Times New Roman.ttf'. Sử dụng font 'Vera' thay thế.")
     pdfmetrics.registerFont(TTFont('Vera', 'Vera.ttf'))
+    FONT_NAME = 'Vera'
 
 def tao_pdf_mau_01(data, ten_don_vi=""):
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-    pdf.setFont("TimesNewRoman", 12)
+    pdf.setFont(FONT_NAME, 12)
 
     # Tiêu đề
     if ten_don_vi:
@@ -206,10 +210,10 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     pdf.drawCentredString(width/2, height - 30*mm, "--------------------------")
     pdf.drawRightString(width - 20*mm, height - 35*mm, "Mẫu số: 01/TNDN")
     
-    pdf.setFont("TimesNewRoman", 14)
+    pdf.setFont(FONT_NAME, 14)
     pdf.drawCentredString(width/2, height - 50*mm, "BẢNG KÊ THU MUA HÀNG HÓA, DỊCH VỤ")
     pdf.drawCentredString(width/2, height - 55*mm, "KHÔNG CÓ HÓA ĐƠN")
-    pdf.setFont("TimesNewRoman", 12)
+    pdf.setFont(FONT_NAME, 12)
 
     # Thông tin chung
     pdf.drawString(20*mm, height - 70*mm, f"Họ và tên người bán: {data['ho_va_ten']}")
