@@ -308,7 +308,6 @@ def main_app():
 
 def create_new_transaction_page():
     # Khởi tạo các giá trị trong session_state để lưu trữ trạng thái của form
-    # Điều này đảm bảo các biến tồn tại khi ứng dụng bắt đầu chạy
     if 'ho_ten' not in st.session_state:
         st.session_state.ho_ten = ""
     if 'so_cccd' not in st.session_state:
@@ -369,14 +368,15 @@ def create_new_transaction_page():
 
     st.subheader("2. Tạo bản kê và lưu giao dịch 📝")
     with st.form("form_giao_dich"):
-        # Các ô nhập liệu đọc giá trị từ st.session_state
-        ho_ten_input = st.text_input("Họ và Tên", value=st.session_state.ho_ten, key="ho_ten_key")
-        so_cccd_input = st.text_input("Số Căn cước công dân", value=st.session_state.so_cccd, key="cccd_key")
-        que_quan_input = st.text_input("Quê quán", value=st.session_state.que_quan, key="que_quan_key")
-        so_luong_input = st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong, key="so_luong_key")
-        don_gia_input = st.text_input("Đơn giá (VNĐ/chỉ)", key="don_gia_key")
+        # Cập nhật các ô nhập liệu để đọc giá trị từ session_state. 
+        # Cần đảm bảo các key không trùng lặp và giá trị được cập nhật khi form reruns.
+        ho_ten_input = st.text_input("Họ và Tên", value=st.session_state.ho_ten)
+        so_cccd_input = st.text_input("Số Căn cước công dân", value=st.session_state.so_cccd)
+        que_quan_input = st.text_input("Quê quán", value=st.session_state.que_quan)
+        so_luong_input = st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong)
+        don_gia_input = st.text_input("Đơn giá (VNĐ/chỉ)")
         
-        ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)", key="ten_don_vi_key")
+        ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)")
         
         submitted = st.form_submit_button("Lưu giao dịch")
         
