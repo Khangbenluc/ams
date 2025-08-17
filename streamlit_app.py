@@ -455,7 +455,7 @@ def build_pdf_bytes_from_row(row: Dict[str, Any], logo_path: Optional[str] = Non
         table_data = [
             ["STT", "Tên hàng/dịch vụ", "ĐVT", "Số lượng", "Đơn giá (VNĐ)", "Thành tiền (VNĐ)"],
             ["1", row.get('mieu_ta', 'Hàng hóa'), row.get('don_vi_unit', ''),  # placeholder to keep code readable
-        ]
+        ]]
 
         # Build properly with casting to strings and formatting
         table_data = [
