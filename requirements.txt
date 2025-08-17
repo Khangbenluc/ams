@@ -1,1 +1,5 @@
 streamlit
+easyocr
+opencv-python
+numpy
+pandas
