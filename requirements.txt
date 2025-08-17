@@ -1,6 +1,7 @@
 streamlit
 opencv-python-headless
 paddleocr
+paddlepaddle
 pytz
 pandas
 numpy
