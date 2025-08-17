@@ -238,7 +238,7 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
         st.error(f"Lỗi: Dữ liệu nhập không hợp lệ. {e}")
         return None
 
-FONT_FILE = "Arial.ttf"
+FONT_FILE = "arial.ttf"
 FONT_NAME = "Arial"
 try:
     if os.path.exists(FONT_FILE):
