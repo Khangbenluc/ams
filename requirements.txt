@@ -1,8 +1,12 @@
 streamlit
-opencv-python-headless
+opencv-python-headness
 numpy
 pandas
+sqlite3
+reportlab
+pytz
+Pillow
+bcrypt
+matplotlib
 paddleocr
 paddlepaddle
-pytz
-reportlab
