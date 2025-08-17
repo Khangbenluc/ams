@@ -18,13 +18,16 @@ import os
 import matplotlib.pyplot as plt
 import tempfile
 
+# ========== CẤU HÌNH =============
+st.set_page_config(layout="wide")
+
 # --- Quản lý người dùng (đơn giản, dùng cho demo) ---
 users = {
     "admin": "admin123",
     "user1": "user123"
 }
 
-# --- Khởi tạo OCR (cache) ---
+# --- Khởi tạo OCR (cache để nhanh) ---
 @st.cache_resource
 def get_reader():
     return PaddleOCR(lang="vi", use_angle_cls=False)
@@ -34,6 +37,7 @@ ocr = get_reader()
 # --- Kết nối SQLite ---
 conn = sqlite3.connect("lich_su_giao_dich.db", check_same_thread=False)
 c = conn.cursor()
+
 c.execute('''
 CREATE TABLE IF NOT EXISTS lich_su (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +52,7 @@ CREATE TABLE IF NOT EXISTS lich_su (
 ''')
 conn.commit()
 
-# --- Chuyển số sang chữ ---
+# ========== HỖ TRỢ NHIỀU HÀM =============
 def doc_so_thanh_chu(number):
     if not isinstance(number, (int, float)) or number < 0:
         return "Số không hợp lệ"
@@ -92,13 +96,12 @@ def doc_so_thanh_chu(number):
             ket_qua += doc_ba_so(p) + " " + don_vi[len(parts) - 1 - i] + " "
     return ket_qua.strip().capitalize() + " đồng"
 
-# --- Xử lý ảnh / OCR helpers (an toàn) ---
+# --- OCR helpers (an toàn với nhiều dạng output) ---
 def _bytes_to_bgr(image_bytes):
-    """Đọc bytes -> BGR 3 kênh (IMREAD_COLOR)."""
     return cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
 
 def _safe_ocr_call(img_bgr):
-    """Gọi ocr.ocr với fallback (BGR -> RGB -> tệp tạm)."""
+    """Gọi ocr.ocr với fallback: BGR -> RGB -> tệp tạm."""
     try:
         return ocr.ocr(img_bgr)
     except Exception:
@@ -117,7 +120,6 @@ def _safe_ocr_call(img_bgr):
                 return None
 
 def _extract_texts_from_ocr_result(result):
-    """Trích text an toàn từ nhiều biến thể cấu trúc trả về của PaddleOCR."""
     texts = []
     try:
         if not result:
@@ -129,9 +131,8 @@ def _extract_texts_from_ocr_result(result):
             if isinstance(line, (list, tuple)):
                 if len(line) >= 2:
                     item = line[1]
-                    if isinstance(item, (list, tuple)):
-                        if len(item) >= 1 and isinstance(item[0], str):
-                            texts.append(item[0])
+                    if isinstance(item, (list, tuple)) and len(item) >= 1 and isinstance(item[0], str):
+                        texts.append(item[0])
                     elif isinstance(item, dict) and isinstance(item.get("text"), str):
                         texts.append(item["text"])
                     elif isinstance(item, str):
@@ -145,17 +146,15 @@ def _extract_texts_from_ocr_result(result):
     return texts
 
 def preprocess_image_for_ocr(image_bytes):
-    """Tiền xử lý: đọc bytes -> grayscale equalize -> trả về BGR để OCR ổn định."""
     img = _bytes_to_bgr(image_bytes)
     if img is None:
         return None
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (5,5), 0)
     equalized = cv2.equalizeHist(blurred)
-    # Trả về BGR 3 kênh (vì PaddleOCR có thể kỳ quặc với ảnh 1 kênh)
     return cv2.cvtColor(equalized, cv2.COLOR_GRAY2BGR)
 
-# --- Hàm OCR CCCD (an toàn, trả về ho_ten, so_cccd, que_quan) ---
+# --- Hàm OCR CCCD (an toàn) ---
 def trich_xuat_cccd(image_bytes):
     ho_ten, so_cccd, que_quan = "", "", ""
     try:
@@ -168,14 +167,14 @@ def trich_xuat_cccd(image_bytes):
             return ho_ten, so_cccd, que_quan
         all_text_upper = [str(t).upper() for t in all_text_raw]
 
-        # Họ và tên: lấy dòng sau "HỌ VÀ TÊN"
+        # Họ và tên (dòng sau "HỌ VÀ TÊN")
         for i, t in enumerate(all_text_upper):
             if "HỌ VÀ TÊN" in t:
                 if i + 1 < len(all_text_raw):
                     ho_ten = str(all_text_raw[i + 1]).strip()
                 break
 
-        # Số CCCD: 12 chữ số
+        # Số CCCD (12 chữ số)
         pat_cccd = re.compile(r"\d{12}")
         for t in all_text_raw:
             m = pat_cccd.search(str(t).replace(" ", ""))
@@ -183,7 +182,7 @@ def trich_xuat_cccd(image_bytes):
                 so_cccd = m.group(0)
                 break
 
-        # Quê quán: lấy dòng sau "QUÊ QUÁN"
+        # Quê quán (dòng sau "QUÊ QUÁN")
         for i, t in enumerate(all_text_upper):
             if "QUÊ QUÁN" in t:
                 if i + 1 < len(all_text_raw):
@@ -194,17 +193,15 @@ def trich_xuat_cccd(image_bytes):
     except Exception:
         return "", "", ""
 
-# --- Hàm OCR cân (lấy số lớn nhất / hợp lý nhất trên màn hình cân) ---
+# --- Hàm OCR cân (an toàn) ---
 def trich_xuat_can(image_bytes):
     try:
         proc_bgr = preprocess_image_for_ocr(image_bytes)
         if proc_bgr is None:
             return ""
-        # Threshold để tăng độ tương phản chữ
         gray = cv2.cvtColor(proc_bgr, cv2.COLOR_BGR2GRAY)
         thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 31, 10)
         proc_bgr2 = cv2.cvtColor(thr, cv2.COLOR_GRAY2BGR)
-
         result = _safe_ocr_call(proc_bgr2)
         texts = _extract_texts_from_ocr_result(result)
         if not texts:
@@ -225,7 +222,7 @@ def trich_xuat_can(image_bytes):
     except Exception:
         return ""
 
-# --- Hàm tính tiền và lưu SQLite ---
+# ========== Hàm tính tiền & PDF (giữ nguyên chức năng) ==========
 def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
     try:
         so_luong = float(str(so_luong_str).replace(',', ''))
@@ -255,7 +252,6 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
         st.error(f"Lỗi: Dữ liệu nhập không hợp lệ. {e}")
         return None
 
-# --- Hàm tạo PDF theo mẫu 01/TNDN ---
 FONT_FILE = "Arial.ttf"
 FONT_NAME = "Arial"
 try:
@@ -308,7 +304,7 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     buffer.seek(0)
     return buffer
 
-# --- Giao diện Streamlit ---
+# ========== GIAO DIỆN ==========
 def login_page():
     st.title("Đăng nhập/Đăng ký")
     menu = ["Đăng nhập", "Đăng ký"]
@@ -352,7 +348,7 @@ def main_app():
         history_and_stats_page()
 
 def create_new_transaction_page():
-    # Khởi tạo session_state mặc định (đảm bảo có key trước khi gọi widget)
+    # Khởi tạo session_state mặc định
     defaults = {
         "ho_ten": "",
         "so_cccd": "",
@@ -377,19 +373,26 @@ def create_new_transaction_page():
         if anh_cccd:
             with st.spinner("Đang xử lý OCR CCCD..."):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(anh_cccd.read())
-                st.session_state.ho_ten = ho_ten
-                st.session_state.so_cccd = so_cccd
-                st.session_state.que_quan = que_quan
+                # Ghi vào session_state (nếu trống thì giữ giá trị rỗng)
+                if ho_ten:
+                    st.session_state.ho_ten = ho_ten
+                if so_cccd:
+                    st.session_state.so_cccd = so_cccd
+                if que_quan:
+                    st.session_state.que_quan = que_quan
             st.success("Đã trích xuất thông tin CCCD!")
-            st.image(anh_cccd)
+            st.image(anh_cccd, use_column_width=True)
         elif uploaded_cccd:
             with st.spinner("Đang xử lý OCR CCCD..."):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(uploaded_cccd.read())
-                st.session_state.ho_ten = ho_ten
-                st.session_state.so_cccd = so_cccd
-                st.session_state.que_quan = que_quan
+                if ho_ten:
+                    st.session_state.ho_ten = ho_ten
+                if so_cccd:
+                    st.session_state.so_cccd = so_cccd
+                if que_quan:
+                    st.session_state.que_quan = que_quan
             st.success("Đã trích xuất thông tin CCCD!")
-            st.image(uploaded_cccd)
+            st.image(uploaded_cccd, use_column_width=True)
 
     with col_can:
         st.subheader("Chụp ảnh hoặc tải ảnh cân")
@@ -398,45 +401,78 @@ def create_new_transaction_page():
         if anh_can:
             with st.spinner("Đang xử lý OCR cân..."):
                 so_luong = trich_xuat_can(anh_can.read())
-                st.session_state.so_luong = so_luong
+                if so_luong:
+                    st.session_state.so_luong = so_luong
             st.success("Đã trích xuất khối lượng!")
-            st.image(anh_can)
+            st.image(anh_can, use_column_width=True)
         elif uploaded_can:
             with st.spinner("Đang xử lý OCR cân..."):
                 so_luong = trich_xuat_can(uploaded_can.read())
-                st.session_state.so_luong = so_luong
+                if so_luong:
+                    st.session_state.so_luong = so_luong
             st.success("Đã trích xuất khối lượng!")
-            st.image(uploaded_can)
+            st.image(uploaded_can, use_column_width=True)
 
     st.markdown("---")
     st.subheader("2. Nhập đơn giá và lưu giao dịch 📝")
 
-    # Hiển thị tóm tắt (giữ để không đổi giao diện cũ)
+    # Hiển thị tóm tắt (thông tin sẵn có)
     st.info(f"Họ và Tên: **{st.session_state.ho_ten}**")
     st.info(f"Số CCCD: **{st.session_state.so_cccd}**")
     st.info(f"Quê quán: **{st.session_state.que_quan}**")
     st.info(f"Khối lượng: **{st.session_state.so_luong}** chỉ")
 
-    # Đồng thời cho phép chỉnh sửa (kết nối trực tiếp tới session_state)
-    st.write("**(Có thể chỉnh sửa trước khi lưu)**")
-    st.text_input("Họ và tên người bán", key="ho_ten")
-    st.text_input("Số CCCD", key="so_cccd")
-    st.text_area("Quê quán", key="que_quan")
-    st.text_input("Khối lượng (chỉ)", key="so_luong")
+    st.write("**(Nếu OCR đã trích xuất được, ô tương ứng sẽ bị khóa — không thể nhập lại. Nếu chưa có, bạn có thể nhập thủ công.)**")
+
+    # Họ tên => khóa nếu OCR có, else cho nhập
+    if st.session_state.get("ho_ten"):
+        st.text_input("Họ và tên người bán", value=st.session_state.ho_ten, disabled=True, key="ho_ten_disabled")
+    else:
+        st.text_input("Họ và tên người bán", key="ho_ten")
+
+    # Số CCCD
+    if st.session_state.get("so_cccd"):
+        st.text_input("Số CCCD", value=st.session_state.so_cccd, disabled=True, key="so_cccd_disabled")
+    else:
+        st.text_input("Số CCCD", key="so_cccd")
+
+    # Quê quán
+    if st.session_state.get("que_quan"):
+        st.text_area("Quê quán", value=st.session_state.que_quan, disabled=True, key="que_quan_disabled")
+    else:
+        st.text_area("Quê quán", key="que_quan")
+
+    # Khối lượng (chỉ)
+    if st.session_state.get("so_luong"):
+        st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong, disabled=True, key="so_luong_disabled")
+    else:
+        st.text_input("Khối lượng (chỉ)", key="so_luong")
+
+    # Don gia and ten don vi luôn để nhập (người dùng cung cấp)
     st.text_input("Đơn giá (VNĐ/chỉ)", key="don_gia_input")
     st.text_input("Tên đơn vị (không bắt buộc)", key="ten_don_vi")
 
+    # Khi lưu: lấy value ưu tiên từ các key editable (nếu có), else từ disabled key
+    def _get_value(field):
+        # field: "ho_ten", "so_cccd", "que_quan", "so_luong"
+        # ưu tiên key (editable) tồn tại -> st.session_state[field]
+        if st.session_state.get(field):
+            return st.session_state.get(field)
+        # else check disabled key
+        disabled_key = field + "_disabled"
+        return st.session_state.get(disabled_key, "")
+
     if st.button("Lưu giao dịch"):
-        if not st.session_state.ho_ten or not st.session_state.so_luong or not st.session_state.don_gia_input:
-            st.error("Vui lòng đảm bảo đã trích xuất thông tin và nhập đơn giá trước khi lưu.")
+        ho_va_ten = _get_value("ho_ten")
+        so_cccd_val = _get_value("so_cccd")
+        que_quan_val = _get_value("que_quan")
+        so_luong_val = _get_value("so_luong")
+        don_gia_val = st.session_state.get("don_gia_input", "")
+
+        if not ho_va_ten or not so_luong_val or not don_gia_val:
+            st.error("Vui lòng đảm bảo đã trích xuất/nhập Họ tên, Khối lượng và nhập đơn giá trước khi lưu.")
         else:
-            giao_dich_data = xu_ly_giao_dich(
-                st.session_state.ho_ten,
-                st.session_state.so_cccd,
-                st.session_state.que_quan,
-                st.session_state.so_luong,
-                st.session_state.don_gia_input
-            )
+            giao_dich_data = xu_ly_giao_dich(ho_va_ten, so_cccd_val, que_quan_val, so_luong_val, don_gia_val)
             if giao_dich_data:
                 st.success("Giao dịch đã được lưu thành công!")
                 st.metric(label="Thành Tiền", value=f"{giao_dich_data['thanh_tien']:,.0f} VNĐ")
@@ -446,19 +482,22 @@ def create_new_transaction_page():
                 st.session_state.pdf_for_download = pdf_buffer
                 st.session_state.giao_dich_data = giao_dich_data
 
+    # Hiển thị download PDF nếu có
     if st.session_state.pdf_for_download:
-        # download_button cần bytes -> dùng getvalue()
         st.download_button(
             "Tải bản kê PDF (Mẫu 01/TNDN)",
             data=st.session_state.pdf_for_download.getvalue(),
-            file_name=f"bang_ke_{st.session_state.giao_dich_data['ho_va_ten'].replace(' ', '_')}.pdf",
+            file_name=f"bang_ke_{(st.session_state.giao_dich_data['ho_va_ten']).replace(' ', '_')}.pdf",
             mime="application/pdf"
         )
 
     st.markdown("---")
     if st.button("Làm mới trang"):
-        for k in ["ho_ten", "so_cccd", "que_quan", "so_luong", "pdf_for_download", "giao_dich_data", "don_gia_input", "ten_don_vi"]:
-            st.session_state[k] = "" if isinstance(st.session_state.get(k, ""), str) else None
+        # reset keys (giữ login)
+        for k in ["ho_ten", "so_cccd", "que_quan", "so_luong", "pdf_for_download", "giao_dich_data", "don_gia_input", "ten_don_vi",
+                  "ho_ten_disabled", "so_cccd_disabled", "que_quan_disabled", "so_luong_disabled"]:
+            if k in st.session_state:
+                del st.session_state[k]
         st.rerun()
 
 def history_and_stats_page():
@@ -467,17 +506,20 @@ def history_and_stats_page():
     if df.empty:
         st.info("Chưa có giao dịch nào được ghi lại.")
         return
+
     st.subheader("Bộ lọc")
     col1, col2 = st.columns(2)
     with col1:
         ho_ten_search = st.text_input("Tìm kiếm theo tên khách hàng")
     with col2:
         cccd_search = st.text_input("Tìm kiếm theo CCCD")
+
     df_filtered = df.copy()
     if ho_ten_search:
         df_filtered = df_filtered[df_filtered['ho_va_ten'].str.contains(ho_ten_search, case=False, na=False)]
     if cccd_search:
         df_filtered = df_filtered[df_filtered['so_cccd'].str.contains(cccd_search, case=False, na=False)]
+
     st.markdown("---")
     st.subheader("Thống kê")
     col_stats1, col_stats2, col_stats3 = st.columns(3)
@@ -490,6 +532,7 @@ def history_and_stats_page():
     with col_stats3:
         tong_khoi_luong = df_filtered['khoi_luong'].sum()
         st.metric("Tổng khối lượng", value=f"{tong_khoi_luong} chỉ")
+
     st.markdown("---")
     st.subheader("Biểu đồ doanh thu")
     df_filtered['thoi_gian'] = pd.to_datetime(df_filtered['thoi_gian'])
