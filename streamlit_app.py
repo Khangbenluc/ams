@@ -381,7 +381,7 @@ def create_new_transaction_page():
                 if que_quan:
                     st.session_state.que_quan = que_quan
             st.success("Đã trích xuất thông tin CCCD!")
-            st.image(anh_cccd, use_column_width=True)
+            st.image(anh_cccd, use_container_width=True)
         elif uploaded_cccd:
             with st.spinner("Đang xử lý OCR CCCD..."):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(uploaded_cccd.read())
@@ -392,7 +392,7 @@ def create_new_transaction_page():
                 if que_quan:
                     st.session_state.que_quan = que_quan
             st.success("Đã trích xuất thông tin CCCD!")
-            st.image(uploaded_cccd, use_column_width=True)
+            st.image(uploaded_cccd, use_container_width=True)
 
     with col_can:
         st.subheader("Chụp ảnh hoặc tải ảnh cân")
