@@ -6,7 +6,7 @@ import pandas as pd
 import sqlite3
 from datetime import datetime
 import pytz
-from paddleocr import PaddleOCR
+import easyocr
 from io import BytesIO
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -21,23 +21,22 @@ import tempfile
 # ========== CẤU HÌNH =============
 st.set_page_config(layout="wide")
 
-# --- Quản lý người dùng (đơn giản, dùng cho demo) ---
+# --- Quản lý người dùng (đơn giản, demo) ---
 users = {
     "admin": "admin123",
     "user1": "user123"
 }
 
-# --- Khởi tạo OCR (cache để nhanh) ---
+# --- Khởi tạo EasyOCR (cache) ---
 @st.cache_resource
 def get_reader():
-    return PaddleOCR(lang="vi", use_angle_cls=False)
+    return easyocr.Reader(['vi', 'en'], gpu=False)
 
-ocr = get_reader()
+reader = get_reader()
 
 # --- Kết nối SQLite ---
 conn = sqlite3.connect("lich_su_giao_dich.db", check_same_thread=False)
 c = conn.cursor()
-
 c.execute('''
 CREATE TABLE IF NOT EXISTS lich_su (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,114 +95,102 @@ def doc_so_thanh_chu(number):
             ket_qua += doc_ba_so(p) + " " + don_vi[len(parts) - 1 - i] + " "
     return ket_qua.strip().capitalize() + " đồng"
 
-# --- OCR helpers (an toàn với nhiều dạng output) ---
+# --- Image helpers ---
 def _bytes_to_bgr(image_bytes):
     return cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
-
-def _safe_ocr_call(img_bgr):
-    """Gọi ocr.ocr với fallback: BGR -> RGB -> tệp tạm."""
-    try:
-        return ocr.ocr(img_bgr)
-    except Exception:
-        try:
-            img_rgb = img_bgr[:, :, ::-1]
-            return ocr.ocr(img_rgb)
-        except Exception:
-            try:
-                fd, tmp_path = tempfile.mkstemp(suffix=".jpg")
-                os.close(fd)
-                cv2.imwrite(tmp_path, img_bgr)
-                res = ocr.ocr(tmp_path)
-                os.remove(tmp_path)
-                return res
-            except Exception:
-                return None
-
-def _extract_texts_from_ocr_result(result):
-    texts = []
-    try:
-        if not result:
-            return texts
-        batch = result[0] if isinstance(result, (list, tuple)) else result
-        if not batch:
-            return texts
-        for line in batch:
-            if isinstance(line, (list, tuple)):
-                if len(line) >= 2:
-                    item = line[1]
-                    if isinstance(item, (list, tuple)) and len(item) >= 1 and isinstance(item[0], str):
-                        texts.append(item[0])
-                    elif isinstance(item, dict) and isinstance(item.get("text"), str):
-                        texts.append(item["text"])
-                    elif isinstance(item, str):
-                        texts.append(item)
-                elif len(line) >= 1 and isinstance(line[0], str):
-                    texts.append(line[0])
-            elif isinstance(line, dict) and isinstance(line.get("text"), str):
-                texts.append(line["text"])
-    except Exception:
-        pass
-    return texts
 
 def preprocess_image_for_ocr(image_bytes):
     img = _bytes_to_bgr(image_bytes)
     if img is None:
         return None
+    # cải thiện: grayscale -> bilateral -> adaptive threshold
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blurred = cv2.GaussianBlur(gray, (5,5), 0)
-    equalized = cv2.equalizeHist(blurred)
-    return cv2.cvtColor(equalized, cv2.COLOR_GRAY2BGR)
+    gray = cv2.bilateralFilter(gray, 9, 75, 75)
+    thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                cv2.THRESH_BINARY, 31, 9)
+    # trả về màu BGR vì easyocr chấp nhận cả ảnh màu/ngang
+    return cv2.cvtColor(thr, cv2.COLOR_GRAY2BGR)
 
-# --- Hàm OCR CCCD (an toàn) ---
-def trich_xuat_cccd(image_bytes):
+# --- EasyOCR extract helper (dùng detail=0 -> list text) ---
+def _easyocr_texts_from_bytes(image_bytes):
+    img = _bytes_to_bgr(image_bytes)
+    if img is None:
+        return []
+    try:
+        texts = reader.readtext(img, detail=0)
+        return [str(t).strip() for t in texts if t is not None]
+    except Exception:
+        # fallback: dùng preprocessed
+        proc = preprocess_image_for_ocr(image_bytes)
+        if proc is None:
+            return []
+        try:
+            texts = reader.readtext(proc, detail=0)
+            return [str(t).strip() for t in texts if t is not None]
+        except Exception:
+            return []
+
+# --- Hàm OCR CCCD bằng EasyOCR ---
+def trich_xuat_cccd_easy(image_bytes):
     ho_ten, so_cccd, que_quan = "", "", ""
     try:
-        proc_bgr = preprocess_image_for_ocr(image_bytes)
-        if proc_bgr is None:
-            return ho_ten, so_cccd, que_quan
-        result = _safe_ocr_call(proc_bgr)
-        all_text_raw = _extract_texts_from_ocr_result(result)
-        if not all_text_raw:
-            return ho_ten, so_cccd, que_quan
-        all_text_upper = [str(t).upper() for t in all_text_raw]
+        texts = _easyocr_texts_from_bytes(image_bytes)
+        if not texts:
+            return "", "", ""
+        texts_upper = [t.upper() for t in texts]
 
-        # Họ và tên (dòng sau "HỌ VÀ TÊN")
-        for i, t in enumerate(all_text_upper):
-            if "HỌ VÀ TÊN" in t:
-                if i + 1 < len(all_text_raw):
-                    ho_ten = str(all_text_raw[i + 1]).strip()
+        # Tìm "HỌ VÀ TÊN" hoặc "HỌ TÊN" hoặc "HỌ & TÊN"
+        for i, t in enumerate(texts_upper):
+            if "HỌ VÀ TÊN" in t or "HỌ TÊN" in t or "HỌ VÀ TÊN:" in t or "HỌ & TÊN" in t:
+                if i + 1 < len(texts):
+                    ho_ten = texts[i + 1]
                 break
+        # fallback: tìm dòng chứa "Họ" + dấu ví dụ "Họ tên: NGUYEN VAN A"
+        if not ho_ten:
+            for t in texts:
+                m = re.search(r"Họ( và)? tên[:\s\-]*([A-Za-zÀ-ỹ\s]+)", t, re.IGNORECASE)
+                if m:
+                    ho_ten = m.group(2).strip()
+                    break
 
         # Số CCCD (12 chữ số)
         pat_cccd = re.compile(r"\d{12}")
-        for t in all_text_raw:
-            m = pat_cccd.search(str(t).replace(" ", ""))
+        for t in texts:
+            m = pat_cccd.search(t.replace(" ", ""))
             if m:
                 so_cccd = m.group(0)
                 break
 
-        # Quê quán (dòng sau "QUÊ QUÁN")
-        for i, t in enumerate(all_text_upper):
-            if "QUÊ QUÁN" in t:
-                if i + 1 < len(all_text_raw):
-                    que_quan = str(all_text_raw[i + 1]).strip()
+        # Quê quán
+        for i, t in enumerate(texts_upper):
+            if "QUÊ QUÁN" in t or "QUE QUAN" in t:
+                if i + 1 < len(texts):
+                    que_quan = texts[i + 1]
                 break
+        # fallback: nếu vẫn rỗng, tìm dòng chứa từ "QUÊ" hoặc "QUÊ QUÁN"
+        if not que_quan:
+            for t in texts:
+                if "QUÊ" in t.upper():
+                    que_quan = t
+                    break
 
         return ho_ten, so_cccd, que_quan
     except Exception:
         return "", "", ""
 
-# --- Hàm OCR cân (an toàn) ---
-def trich_xuat_can(image_bytes):
+# --- Hàm OCR cân bằng EasyOCR ---
+def trich_xuat_can_easy(image_bytes):
     try:
-        proc_bgr = preprocess_image_for_ocr(image_bytes)
-        if proc_bgr is None:
-            return ""
-        gray = cv2.cvtColor(proc_bgr, cv2.COLOR_BGR2GRAY)
-        thr = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 31, 10)
-        proc_bgr2 = cv2.cvtColor(thr, cv2.COLOR_GRAY2BGR)
-        result = _safe_ocr_call(proc_bgr2)
-        texts = _extract_texts_from_ocr_result(result)
+        # dùng preprocessed ảnh cân để tăng độ chính xác số
+        proc = preprocess_image_for_ocr(image_bytes)
+        texts = []
+        if proc is not None:
+            try:
+                texts = reader.readtext(proc, detail=0)
+            except Exception:
+                pass
+        if not texts:
+            texts = _easyocr_texts_from_bytes(image_bytes)
         if not texts:
             return ""
         candidates = []
@@ -217,8 +204,7 @@ def trich_xuat_can(image_bytes):
         if not candidates:
             return ""
         candidates.sort(key=lambda x: x[1], reverse=True)
-        best = candidates[0][0].replace(",", ".")
-        return best
+        return candidates[0][0].replace(",", ".")
     except Exception:
         return ""
 
@@ -372,8 +358,7 @@ def create_new_transaction_page():
         uploaded_cccd = st.file_uploader("Hoặc tải ảnh CCCD", type=["jpg", "jpeg", "png"], key="cccd_uploader")
         if anh_cccd:
             with st.spinner("Đang xử lý OCR CCCD..."):
-                ho_ten, so_cccd, que_quan = trich_xuat_cccd(anh_cccd.read())
-                # Ghi vào session_state (nếu trống thì giữ giá trị rỗng)
+                ho_ten, so_cccd, que_quan = trich_xuat_cccd_easy(anh_cccd.read())
                 if ho_ten:
                     st.session_state.ho_ten = ho_ten
                 if so_cccd:
@@ -384,7 +369,7 @@ def create_new_transaction_page():
             st.image(anh_cccd, use_container_width=True)
         elif uploaded_cccd:
             with st.spinner("Đang xử lý OCR CCCD..."):
-                ho_ten, so_cccd, que_quan = trich_xuat_cccd(uploaded_cccd.read())
+                ho_ten, so_cccd, que_quan = trich_xuat_cccd_easy(uploaded_cccd.read())
                 if ho_ten:
                     st.session_state.ho_ten = ho_ten
                 if so_cccd:
@@ -400,14 +385,14 @@ def create_new_transaction_page():
         uploaded_can = st.file_uploader("Hoặc tải ảnh cân", type=["jpg", "jpeg", "png"], key="can_uploader")
         if anh_can:
             with st.spinner("Đang xử lý OCR cân..."):
-                so_luong = trich_xuat_can(anh_can.read())
+                so_luong = trich_xuat_can_easy(anh_can.read())
                 if so_luong:
                     st.session_state.so_luong = so_luong
             st.success("Đã trích xuất khối lượng!")
             st.image(anh_can, use_container_width=True)
         elif uploaded_can:
             with st.spinner("Đang xử lý OCR cân..."):
-                so_luong = trich_xuat_can(uploaded_can.read())
+                so_luong = trich_xuat_can_easy(uploaded_can.read())
                 if so_luong:
                     st.session_state.so_luong = so_luong
             st.success("Đã trích xuất khối lượng!")
@@ -454,11 +439,8 @@ def create_new_transaction_page():
 
     # Khi lưu: lấy value ưu tiên từ các key editable (nếu có), else từ disabled key
     def _get_value(field):
-        # field: "ho_ten", "so_cccd", "que_quan", "so_luong"
-        # ưu tiên key (editable) tồn tại -> st.session_state[field]
         if st.session_state.get(field):
             return st.session_state.get(field)
-        # else check disabled key
         disabled_key = field + "_disabled"
         return st.session_state.get(disabled_key, "")
 
@@ -548,6 +530,42 @@ def history_and_stats_page():
     st.markdown("---")
     st.subheader("Lịch sử giao dịch")
     st.dataframe(df_filtered)
+
+    # Cho phép chọn 1 dòng để edit hoặc xóa
+    st.markdown("**Chỉnh sửa / Xóa 1 bản ghi**")
+    ids = df_filtered['id'].astype(str).tolist()
+    chosen = st.selectbox("Chọn ID để chỉnh sửa/xóa", [""] + ids)
+    if chosen:
+        row = df_filtered[df_filtered['id'].astype(str) == chosen].iloc[0]
+        edit_col1, edit_col2 = st.columns(2)
+        with edit_col1:
+            e_name = st.text_input("Họ và tên", value=row['ho_va_ten'])
+            e_cccd = st.text_input("Số CCCD", value=row['so_cccd'])
+            e_qq = st.text_area("Quê quán", value=row['que_quan'])
+        with edit_col2:
+            e_khoi = st.text_input("Khối lượng (chỉ)", value=str(row['khoi_luong']))
+            e_dongia = st.text_input("Đơn giá (VNĐ/chỉ)", value=str(row['don_gia']))
+            if st.button("Cập nhật bản ghi"):
+                try:
+                    c.execute('''
+                        UPDATE lich_su
+                        SET ho_va_ten=?, so_cccd=?, que_quan=?, khoi_luong=?, don_gia=?, thanh_tien=?
+                        WHERE id=?
+                    ''', (e_name, e_cccd, e_qq, float(e_khoi), float(e_dongia), float(e_khoi)*float(e_dongia), int(chosen)))
+                    conn.commit()
+                    st.success("Cập nhật thành công.")
+                    st.experimental_rerun()
+                except Exception as ex:
+                    st.error(f"Lỗi cập nhật: {ex}")
+            if st.button("Xóa bản ghi"):
+                try:
+                    c.execute('DELETE FROM lich_su WHERE id=?', (int(chosen),))
+                    conn.commit()
+                    st.success("Đã xóa bản ghi.")
+                    st.experimental_rerun()
+                except Exception as ex:
+                    st.error(f"Lỗi xóa: {ex}")
+
     csv_file = df_filtered.to_csv(index=False)
     st.download_button(label="Tải xuống CSV", data=csv_file, file_name='lich_su_giao_dich.csv', mime='text/csv')
 
