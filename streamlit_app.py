@@ -83,7 +83,7 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
   - Đơn giá: {don_gia:,.0f} VNĐ
   - Thành tiền: {thanh_tien:,.0f} VNĐ
   ----------------------------------------
-  TP. HCM, ngày {ngay_tao}
+  Bến Lức, ngày {ngay_tao}
       NGƯỜI BÁN                   KHÁCH HÀNG
       (Ký tên)                     (Ký tên)
     """
