@@ -121,82 +121,136 @@ def preprocess_image(img_bytes):
         st.error(f"Lỗi khi tiền xử lý ảnh: {e}")
         return None
 
-# --- Hàm OCR CCCD (đã sửa lỗi) ---
+# --- Hàm OCR CCCD (cực an toàn) ---
 def trich_xuat_cccd(image_bytes):
     ho_ten, so_cccd, que_quan = "", "", ""
     try:
-        if image_bytes is None: 
+        if image_bytes is None:
             return ho_ten, so_cccd, que_quan
-        
+
         preprocessed_img = preprocess_image(image_bytes)
         if preprocessed_img is None:
             return ho_ten, so_cccd, que_quan
 
         result = ocr.ocr(preprocessed_img)
+        all_text_raw = _extract_texts_from_ocr_result(result)
 
-        if not result or not result[0]:
+        if not all_text_raw:
             return ho_ten, so_cccd, que_quan
 
-        all_text = []
-        for line in result[0]:
-            # line[1] = (text, confidence)
-            if line and isinstance(line[1], tuple):
-                text = line[1][0].upper()
-                all_text.append(text)
+        # Dùng bản UPPER để dò nhãn, giữ nguyên bản gốc để lấy giá trị
+        all_text_upper = [t.upper() for t in all_text_raw]
 
-        # Tìm Họ và Tên
-        for i, text in enumerate(all_text):
-            if "HỌ VÀ TÊN" in text:
-                if i + 1 < len(all_text):
-                    ho_ten = all_text[i + 1]
+        # Họ và Tên: lấy dòng ngay sau dòng chứa "HỌ VÀ TÊN"
+        for i, txt_u in enumerate(all_text_upper):
+            if "HỌ VÀ TÊN" in txt_u:
+                if i + 1 < len(all_text_raw):
+                    ho_ten = all_text_raw[i + 1].strip()
                 break
 
-        # Tìm số CCCD (12 số)
-        so_cccd_pattern = re.compile(r'\d{12}')
-        for text in all_text:
-            match = so_cccd_pattern.search(text.replace(" ", ""))
-            if match:
-                so_cccd = match.group(0)
+        # Số CCCD: chuỗi 12 chữ số (bỏ khoảng trắng trước khi match)
+        import re
+        so_cccd_pattern = re.compile(r"\d{12}")
+        for t in all_text_raw:
+            m = so_cccd_pattern.search(t.replace(" ", ""))
+            if m:
+                so_cccd = m.group(0)
                 break
 
-        # Tìm Quê quán
-        for i, text in enumerate(all_text):
-            if "QUÊ QUÁN" in text:
-                if i + 1 < len(all_text):
-                    que_quan = all_text[i + 1]
+        # Quê quán: lấy dòng ngay sau dòng chứa "QUÊ QUÁN"
+        for i, txt_u in enumerate(all_text_upper):
+            if "QUÊ QUÁN" in txt_u:
+                if i + 1 < len(all_text_raw):
+                    que_quan = all_text_raw[i + 1].strip()
                 break
 
         return ho_ten, so_cccd, que_quan
+
     except Exception as e:
         st.error(f"Lỗi khi xử lý OCR CCCD: {e}")
         return "", "", ""
 
 
+
 # --- Hàm OCR cân ---
+# --- Hàm OCR cân (cực an toàn) ---
 def trich_xuat_can(image_bytes):
     try:
-        if image_bytes is None: 
+        if image_bytes is None:
             return ""
-        
+
         preprocessed_img = preprocess_image(image_bytes)
         if preprocessed_img is None:
             return ""
 
         result = ocr.ocr(preprocessed_img)
+        texts = _extract_texts_from_ocr_result(result)
+        if not texts:
+            return ""
 
-        if result and result[0]:
-            for line in result[0]:
-                if line and isinstance(line[1], tuple):
-                    text = line[1][0]
-                    # Lọc chỉ lấy số và dấu chấm
-                    cleaned_text = ''.join(c for c in text if c.isdigit() or c == '.')
-                    if cleaned_text:
-                        return cleaned_text
-        return ""
+        # Lọc ra tất cả cụm "số & dấu chấm", chọn cái hợp lý nhất
+        import re
+        candidates = []
+        for t in texts:
+            # gom mọi cụm số (có thể kèm dấu . hoặc ,)
+            for m in re.findall(r"[0-9]+(?:[.,][0-9]+)?", t):
+                val = m.replace(",", ".")
+                try:
+                    candidates.append((m, float(val)))
+                except ValueError:
+                    continue
+
+        if not candidates:
+            return ""
+
+        # Lấy số có giá trị lớn nhất (thường là số hiển thị cân)
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        best = candidates[0][0]
+        # Chuẩn hóa giữ dấu chấm làm phân cách thập phân
+        best = best.replace(",", ".")
+        return best
+
     except Exception as e:
         st.error(f"Lỗi khi xử lý OCR cân: {e}")
         return ""
 
+
+# Helper: lấy text an toàn từ kết quả PaddleOCR (mọi phiên bản/kiểu cấu trúc)
+def _extract_texts_from_ocr_result(result):
+    texts = []
+    try:
+        if not result:
+            return texts
+        batch = result[0] if isinstance(result, list) else result
+        if not batch:
+            return texts
+
+        for line in batch:
+            # TH phổ biến: [bbox, (text, score)]
+            if isinstance(line, (list, tuple)):
+                if len(line) >= 2:
+                    item = line[1]
+                    if isinstance(item, (list, tuple)):
+                        # (text, score) hoặc [text, score]
+                        if len(item) >= 1 and isinstance(item[0], str):
+                            texts.append(item[0])
+                    elif isinstance(item, dict) and isinstance(item.get("text"), str):
+                        texts.append(item["text"])
+                    elif isinstance(item, str):
+                        texts.append(item)
+                else:
+                    # Phòng khi line là (text, score) trực tiếp
+                    if len(line) >= 1 and isinstance(line[0], str):
+                        texts.append(line[0])
+
+            # Một số bản trả về dict
+            elif isinstance(line, dict) and isinstance(line.get("text"), str):
+                texts.append(line["text"])
+
+    except Exception:
+        # Không để hàm nổ — trả về những gì gom được
+        pass
+    return texts
 
 # --- Hàm tính tiền và lưu SQLite ---
 def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
