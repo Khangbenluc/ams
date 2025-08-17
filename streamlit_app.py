@@ -111,7 +111,7 @@ def preprocess_image(img_bytes):
         img = cv2.imdecode(np.frombuffer(img_bytes, np.uint8), cv2.IMREAD_COLOR)
         if img is None:
             st.error("Không thể đọc được hình ảnh. Vui lòng thử lại với file khác.")
-            return np.zeros((10, 10), dtype=np.uint8)
+            return None
         
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -119,7 +119,7 @@ def preprocess_image(img_bytes):
         return equalized
     except Exception as e:
         st.error(f"Lỗi khi tiền xử lý ảnh: {e}")
-        return np.zeros((10, 10), dtype=np.uint8)
+        return None
 
 # --- Hàm OCR CCCD (đã sửa lỗi) ---
 def trich_xuat_cccd(image_bytes):
@@ -129,26 +129,28 @@ def trich_xuat_cccd(image_bytes):
             return ho_ten, so_cccd, que_quan
         
         preprocessed_img = preprocess_image(image_bytes)
+        if preprocessed_img is None:
+            return ho_ten, so_cccd, que_quan
+
         result = ocr.ocr(preprocessed_img) 
         
-        # Thêm kiểm tra ở đây để tránh lỗi index
+        # Kiểm tra tổng thể kết quả OCR
         if not result or not result[0]:
             return ho_ten, so_cccd, que_quan
             
         all_text = []
         for line in result[0]:
-            # Đảm bảo cấu trúc của line là đúng trước khi truy cập
-            if isinstance(line, list) and len(line) > 1 and isinstance(line[1], tuple) and len(line[1]) > 0:
+            # Thêm kiểm tra ở đây để tránh lỗi index
+            # line phải là list, có ít nhất 2 phần tử, và phần tử thứ 2 (line[1]) phải là một tuple/list có ít nhất 1 phần tử
+            if isinstance(line, list) and len(line) > 1 and isinstance(line[1], (tuple, list)) and len(line[1]) > 0:
                 text = line[1][0].upper()
                 all_text.append(text)
         
         # Tìm kiếm Họ và Tên
-        ho_ten_found = False
         for i, text in enumerate(all_text):
             if "HỌ VÀ TÊN" in text:
                 if i + 1 < len(all_text):
                     ho_ten = all_text[i + 1]
-                    ho_ten_found = True
                 break
 
         # Tìm kiếm Số CCCD
@@ -160,12 +162,10 @@ def trich_xuat_cccd(image_bytes):
                 break
         
         # Tìm kiếm Quê quán
-        que_quan_found = False
         for i, text in enumerate(all_text):
             if "QUÊ QUÁN" in text:
                 if i + 1 < len(all_text):
                     que_quan = all_text[i + 1]
-                    que_quan_found = True
                 break
 
         return ho_ten, so_cccd, que_quan
@@ -180,13 +180,16 @@ def trich_xuat_can(image_bytes):
             return ""
         
         preprocessed_img = preprocess_image(image_bytes)
+        if preprocessed_img is None:
+            return ""
+
         result = ocr.ocr(preprocessed_img)
         
         if result and result[0]:
             for line in result[0]:
-                # Đảm bảo cấu trúc của line là đúng trước khi truy cập
-                if isinstance(line, list) and len(line) > 1 and isinstance(line[1], tuple) and len(line[1]) > 0:
+                if isinstance(line, list) and len(line) > 1 and isinstance(line[1], (tuple, list)) and len(line[1]) > 0:
                     text = line[1][0]
+                    # Chỉ lấy số và dấu chấm
                     cleaned_text = ''.join(c for c in text if c.isdigit() or c == '.')
                     if cleaned_text:
                         return cleaned_text
@@ -226,7 +229,6 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
         return None
 
 # --- Hàm tạo PDF theo mẫu 01/TNDN ---
-# Cố gắng đăng ký font Arial, nếu không được thì dùng font mặc định
 FONT_FILE = "Arial.ttf"
 FONT_NAME = "Arial"
 try:
@@ -237,17 +239,15 @@ try:
 except Exception as e:
     st.error(f"Lỗi khi đăng ký font: {e}")
     st.warning("Ứng dụng sẽ sử dụng font mặc định, có thể không hiển thị được tiếng Việt.")
-    FONT_NAME = "Helvetica" # Font mặc định của reportlab
+    FONT_NAME = "Helvetica"
 
 def tao_pdf_mau_01(data, ten_don_vi=""):
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     
-    # Đảm bảo font được sử dụng đã được đăng ký
     pdf.setFont(FONT_NAME, 12)
 
-    # Tiêu đề
     if ten_don_vi:
         pdf.drawString(20*mm, height - 15*mm, ten_don_vi.upper())
     pdf.drawCentredString(width/2, height - 20*mm, "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM")
@@ -260,17 +260,14 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     pdf.drawCentredString(width/2, height - 55*mm, "KHÔNG CÓ HÓA ĐƠN")
     pdf.setFont(FONT_NAME, 12)
 
-    # Thông tin chung
     pdf.drawString(20*mm, height - 70*mm, f"Họ và tên người bán: {data['ho_va_ten']}")
     pdf.drawString(20*mm, height - 75*mm, f"Số CCCD: {data['so_cccd']}")
     pdf.drawString(20*mm, height - 80*mm, f"Quê quán: {data['que_quan']}")
     pdf.drawString(20*mm, height - 85*mm, f"Ngày lập: {data['ngay_tao']}")
 
-    # Bảng chi tiết
     y = height - 100*mm
-    pdf.rect(20*mm, y-20*mm, 170*mm, 20*mm) # Khung bảng
+    pdf.rect(20*mm, y-20*mm, 170*mm, 20*mm)
     
-    # Header
     pdf.drawString(22*mm, y - 5*mm, "STT")
     pdf.drawString(35*mm, y - 5*mm, "Tên hàng hóa, dịch vụ")
     pdf.drawString(100*mm, y - 5*mm, "Đơn vị tính")
@@ -278,7 +275,6 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     pdf.drawString(140*mm, y - 5*mm, "Đơn giá")
     pdf.drawString(170*mm, y - 5*mm, "Thành tiền")
 
-    # Dòng dữ liệu
     pdf.drawString(22*mm, y - 15*mm, "1")
     pdf.drawString(35*mm, y - 15*mm, "Hàng hóa")
     pdf.drawString(100*mm, y - 15*mm, "chỉ")
@@ -286,7 +282,6 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     pdf.drawString(140*mm, y - 15*mm, f"{data['don_gia']:,.0f}")
     pdf.drawString(170*mm, y - 15*mm, f"{data['thanh_tien']:,.0f}")
 
-    # Tổng cộng
     y -= 30*mm
     pdf.drawString(20*mm, y, f"Tổng cộng: {data['thanh_tien']:,.0f} VNĐ")
     y -= 5*mm
@@ -346,7 +341,6 @@ def main_app():
         history_and_stats_page()
 
 def create_new_transaction_page():
-    # Khởi tạo các giá trị trong session_state để lưu trữ trạng thái của form
     if 'ho_ten' not in st.session_state:
         st.session_state.ho_ten = ""
     if 'so_cccd' not in st.session_state:
@@ -401,13 +395,11 @@ def create_new_transaction_page():
 
     st.subheader("2. Nhập đơn giá và lưu giao dịch 📝")
     
-    # Hiển thị thông tin đã trích xuất (để người dùng có thể kiểm tra)
     st.info(f"Họ và Tên: **{st.session_state.ho_ten}**")
     st.info(f"Số CCCD: **{st.session_state.so_cccd}**")
     st.info(f"Quê quán: **{st.session_state.que_quan}**")
     st.info(f"Khối lượng: **{st.session_state.so_luong}** chỉ")
     
-    # Chỉ giữ lại ô nhập liệu cho Đơn giá
     don_gia_input = st.text_input("Đơn giá (VNĐ/chỉ)")
     ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)")
 
@@ -444,7 +436,7 @@ def create_new_transaction_page():
         st.rerun()
 
 def history_and_stats_page():
-    st.header("Lịch sử và Thống kê 📈")
+    st.header("Lịch sử và Thống kê �")
     
     df = pd.read_sql_query("SELECT * FROM lich_su ORDER BY thoi_gian DESC", conn)
     
@@ -517,3 +509,4 @@ if __name__ == "__main__":
         main_app()
     else:
         login_page()
+�
