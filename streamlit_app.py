@@ -301,6 +301,7 @@ def main_app():
         history_and_stats_page()
 
 def create_new_transaction_page():
+    # Khởi tạo các giá trị trong session_state để lưu trữ trạng thái của form
     if 'ho_ten' not in st.session_state:
         st.session_state.ho_ten = ""
     if 'so_cccd' not in st.session_state:
@@ -361,9 +362,7 @@ def create_new_transaction_page():
         
         ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)")
         
-        col_submit, col_download = st.columns(2)
-        with col_submit:
-            submitted = st.form_submit_button("Lưu giao dịch")
+        submitted = st.form_submit_button("Lưu giao dịch")
         
         if submitted:
             if not ho_ten_input or not so_luong_input or not don_gia_input:
@@ -372,22 +371,28 @@ def create_new_transaction_page():
                 giao_dich_data = xu_ly_giao_dich(ho_ten_input, so_cccd_input, que_quan_input, so_luong_input, don_gia_input)
                 if giao_dich_data:
                     st.success("Giao dịch đã được lưu thành công!")
-                    st.session_state['last_giao_dich'] = giao_dich_data
                     
                     st.metric(label="Thành Tiền", value=f"{giao_dich_data['thanh_tien']:,.0f} VNĐ")
                     st.write(f"Bằng chữ: {doc_so_thanh_chu(giao_dich_data['thanh_tien'])}")
                     
                     pdf_bytes = tao_pdf_mau_01(giao_dich_data, ten_don_vi)
-                    with col_download:
-                        st.download_button(
-                            "Tải bản kê PDF (Mẫu 01/TNDN)",
-                            data=pdf_bytes,
-                            file_name=f"bang_ke_{giao_dich_data['ho_va_ten']}.pdf",
-                            mime="application/pdf"
-                        )
+                    
+                    # Nút download chỉ hiện sau khi đã submit thành công
+                    st.download_button(
+                        "Tải bản kê PDF (Mẫu 01/TNDN)",
+                        data=pdf_bytes,
+                        file_name=f"bang_ke_{giao_dich_data['ho_va_ten']}.pdf",
+                        mime="application/pdf"
+                    )
+
     st.markdown("---")
+    # Nút làm mới trang để xóa dữ liệu form cũ và bắt đầu giao dịch mới
     if st.button("Làm mới trang"):
-        st.experimental_rerun()
+        st.session_state.ho_ten = ""
+        st.session_state.so_cccd = ""
+        st.session_state.que_quan = ""
+        st.session_state.so_luong = ""
+        st.rerun()
 
 def history_and_stats_page():
     st.header("Lịch sử và Thống kê 📈")
