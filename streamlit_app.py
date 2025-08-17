@@ -116,24 +116,23 @@ def preprocess_image(img_bytes):
 # --- Hàm OCR CCCD ---
 def trich_xuat_cccd(image_bytes):
     try:
-        if image_bytes is None: return "", "", ""
+        ho_ten, so_cccd, que_quan = "", "", ""
+        if image_bytes is None: 
+            return ho_ten, so_cccd, que_quan
+        
         preprocessed_img = preprocess_image(image_bytes)
         result = ocr.ocr(preprocessed_img) 
         
-        ho_ten, so_cccd, que_quan = "", "", ""
         if result and result[0]:
-            for line in result[0]:
+            for idx, line in enumerate(result[0]):
                 text = line[1][0].upper()
-                if "HỌ VÀ TÊN" in text:
-                    idx = result[0].index(line)
-                    if idx + 1 < len(result[0]):
-                        ho_ten = result[0][idx + 1][1][0]
+                # Thêm kiểm tra 'and idx + 1 < len(result[0])' để đảm bảo index không bị lỗi
+                if "HỌ VÀ TÊN" in text and idx + 1 < len(result[0]):
+                    ho_ten = result[0][idx + 1][1][0]
                 elif "SỐ" in text and len(text.split()[-1]) == 12 and text.split()[-1].isdigit():
                     so_cccd = text.split()[-1]
-                elif "QUÊ QUÁN" in text:
-                    idx = result[0].index(line)
-                    if idx + 1 < len(result[0]):
-                        que_quan = result[0][idx + 1][1][0]
+                elif "QUÊ QUÁN" in text and idx + 1 < len(result[0]):
+                    que_quan = result[0][idx + 1][1][0]
         return ho_ten, so_cccd, que_quan
     except Exception as e:
         st.error(f"Lỗi khi xử lý OCR: {e}")
@@ -142,9 +141,12 @@ def trich_xuat_cccd(image_bytes):
 # --- Hàm OCR cân ---
 def trich_xuat_can(image_bytes):
     try:
-        if image_bytes is None: return ""
+        if image_bytes is None: 
+            return ""
+        
         preprocessed_img = preprocess_image(image_bytes)
         result = ocr.ocr(preprocessed_img)
+        
         if result and result[0]:
             for line in result[0]:
                 text = line[1][0]
@@ -188,7 +190,7 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
 
 # --- Hàm tạo PDF theo mẫu 01/TNDN ---
 # Cố gắng đăng ký font Arial, nếu không được thì dùng font mặc định
-FONT_FILE = "arial.ttf"
+FONT_FILE = "Arial.ttf"
 FONT_NAME = "Arial"
 try:
     if os.path.exists(FONT_FILE):
@@ -336,6 +338,7 @@ def create_new_transaction_page():
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
             st.success("Trích xuất thành công! Dữ liệu đã được điền vào form.")
+            st.rerun() # Thêm lệnh này để làm mới giao diện ngay lập tức
         elif uploaded_cccd:
             with st.spinner('Đang xử lý OCR...'):
                 ho_ten, so_cccd, que_quan = trich_xuat_cccd(uploaded_cccd.read())
@@ -344,6 +347,7 @@ def create_new_transaction_page():
                 st.session_state.so_cccd = so_cccd
                 st.session_state.que_quan = que_quan
             st.success("Trích xuất thành công! Dữ liệu đã được điền vào form.")
+            st.rerun() # Thêm lệnh này để làm mới giao diện ngay lập tức
     
     with col_can:
         st.subheader("Chụp ảnh hoặc tải ảnh cân")
@@ -357,46 +361,40 @@ def create_new_transaction_page():
                 # Cập nhật session_state để điền vào ô nhập liệu
                 st.session_state.so_luong = so_luong
             st.success("Trích xuất thành công! Khối lượng đã được điền vào form.")
+            st.rerun() # Thêm lệnh này để làm mới giao diện ngay lập tức
         elif uploaded_can:
             with st.spinner('Đang xử lý OCR...'):
                 so_luong = trich_xuat_can(uploaded_can.read())
                 # Cập nhật session_state để điền vào ô nhập liệu
                 st.session_state.so_luong = so_luong
             st.success("Trích xuất thành công! Khối lượng đã được điền vào form.")
+            st.rerun() # Thêm lệnh này để làm mới giao diện ngay lập tức
 
     st.markdown("---")
 
     st.subheader("2. Tạo bản kê và lưu giao dịch 📝")
-    with st.form("form_giao_dich"):
-        # Cập nhật các ô nhập liệu để đọc giá trị từ session_state. 
-        # Cần đảm bảo các key không trùng lặp và giá trị được cập nhật khi form reruns.
-        ho_ten_input = st.text_input("Họ và Tên", value=st.session_state.ho_ten)
-        so_cccd_input = st.text_input("Số Căn cước công dân", value=st.session_state.so_cccd)
-        que_quan_input = st.text_input("Quê quán", value=st.session_state.que_quan)
-        so_luong_input = st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong)
-        don_gia_input = st.text_input("Đơn giá (VNĐ/chỉ)")
-        
-        ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)")
-        
-        submitted = st.form_submit_button("Lưu giao dịch")
-        
-        if submitted:
-            if not ho_ten_input or not so_luong_input or not don_gia_input:
-                st.error("Vui lòng nhập đầy đủ thông tin.")
-            else:
-                giao_dich_data = xu_ly_giao_dich(ho_ten_input, so_cccd_input, que_quan_input, so_luong_input, don_gia_input)
-                if giao_dich_data:
-                    st.success("Giao dịch đã được lưu thành công!")
-                    
-                    st.metric(label="Thành Tiền", value=f"{giao_dich_data['thanh_tien']:,.0f} VNĐ")
-                    st.write(f"Bằng chữ: {doc_so_thanh_chu(giao_dich_data['thanh_tien'])}")
-                    
-                    pdf_bytes = tao_pdf_mau_01(giao_dich_data, ten_don_vi)
-                    # Lưu dữ liệu PDF và giao dịch vào session_state
-                    st.session_state.pdf_for_download = pdf_bytes
-                    st.session_state.giao_dich_data = giao_dich_data
-                    
-    # Hiển thị nút download nếu có dữ liệu PDF trong session_state
+    ho_ten_input = st.text_input("Họ và Tên", value=st.session_state.ho_ten)
+    so_cccd_input = st.text_input("Số Căn cước công dân", value=st.session_state.so_cccd)
+    que_quan_input = st.text_input("Quê quán", value=st.session_state.que_quan)
+    so_luong_input = st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong)
+    don_gia_input = st.text_input("Đơn giá (VNĐ/chỉ)")
+    ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)")
+
+    if st.button("Lưu giao dịch"):
+        if not ho_ten_input or not so_luong_input or not don_gia_input:
+            st.error("Vui lòng nhập đầy đủ thông tin.")
+        else:
+            giao_dich_data = xu_ly_giao_dich(ho_ten_input, so_cccd_input, que_quan_input, so_luong_input, don_gia_input)
+            if giao_dich_data:
+                st.success("Giao dịch đã được lưu thành công!")
+                
+                st.metric(label="Thành Tiền", value=f"{giao_dich_data['thanh_tien']:,.0f} VNĐ")
+                st.write(f"Bằng chữ: {doc_so_thanh_chu(giao_dich_data['thanh_tien'])}")
+                
+                pdf_bytes = tao_pdf_mau_01(giao_dich_data, ten_don_vi)
+                st.session_state.pdf_for_download = pdf_bytes
+                st.session_state.giao_dich_data = giao_dich_data
+                
     if st.session_state.pdf_for_download:
         st.download_button(
             "Tải bản kê PDF (Mẫu 01/TNDN)",
@@ -406,7 +404,6 @@ def create_new_transaction_page():
         )
 
     st.markdown("---")
-    # Nút làm mới trang để xóa dữ liệu form cũ và bắt đầu giao dịch mới
     if st.button("Làm mới trang"):
         st.session_state.ho_ten = ""
         st.session_state.so_cccd = ""
@@ -424,7 +421,6 @@ def history_and_stats_page():
         st.info("Chưa có giao dịch nào được ghi lại.")
         return
 
-    # --- Bộ lọc ---
     st.subheader("Bộ lọc")
     col1, col2 = st.columns(2)
     with col1:
@@ -440,7 +436,6 @@ def history_and_stats_page():
 
     st.markdown("---")
 
-    # --- Thống kê ---
     st.subheader("Thống kê")
     
     col_stats1, col_stats2, col_stats3 = st.columns(3)
@@ -456,7 +451,6 @@ def history_and_stats_page():
 
     st.markdown("---")
     
-    # --- Biểu đồ ---
     st.subheader("Biểu đồ doanh thu")
     df_filtered['thoi_gian'] = pd.to_datetime(df_filtered['thoi_gian'])
     df_filtered['ngay'] = df_filtered['thoi_gian'].dt.date
@@ -472,11 +466,9 @@ def history_and_stats_page():
     
     st.markdown("---")
 
-    # --- Lịch sử giao dịch chi tiết ---
     st.subheader("Lịch sử giao dịch")
     st.dataframe(df_filtered)
     
-    # Nút tải xuống CSV
     csv_file = df_filtered.to_csv(index=False)
     st.download_button(
         label="Tải xuống CSV",
