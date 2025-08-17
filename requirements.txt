@@ -7,5 +7,5 @@ pytz
 pillow
 bcrypt
 matplotlib
-paddleocr
+easyocr
 paddlepaddle
