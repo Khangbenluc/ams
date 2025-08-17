@@ -9,13 +9,18 @@ import pytz
 from paddleocr import PaddleOCR
 from io import BytesIO
 from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.units import mm
 import re
 import os
 import matplotlib.pyplot as plt
+
+# --- Quản lý người dùng (đơn giản, dùng cho demo) ---
+users = {
+    "admin": "admin123",
+    "user1": "user123"
+}
 
 # --- Khởi tạo OCR ---
 @st.cache_resource
@@ -187,13 +192,15 @@ except:
     st.warning("Không tìm thấy font 'Times New Roman.ttf'. PDF có thể hiển thị lỗi font.")
     pdfmetrics.registerFont(TTFont('Vera', 'Vera.ttf'))
 
-def tao_pdf_mau_01(data):
+def tao_pdf_mau_01(data, ten_don_vi=""):
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
     pdf.setFont("TimesNewRoman", 12)
 
     # Tiêu đề
+    if ten_don_vi:
+        pdf.drawString(20*mm, height - 15*mm, ten_don_vi.upper())
     pdf.drawCentredString(width/2, height - 20*mm, "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM")
     pdf.drawCentredString(width/2, height - 25*mm, "Độc lập - Tự do - Hạnh phúc")
     pdf.drawCentredString(width/2, height - 30*mm, "--------------------------")
@@ -241,10 +248,45 @@ def tao_pdf_mau_01(data):
     return buffer
 
 # --- Giao diện Streamlit ---
+def login_page():
+    st.title("Đăng nhập/Đăng ký")
+    menu = ["Đăng nhập", "Đăng ký"]
+    choice = st.selectbox("Chọn", menu)
+
+    if choice == "Đăng nhập":
+        st.subheader("Đăng nhập")
+        username = st.text_input("Tên đăng nhập")
+        password = st.text_input("Mật khẩu", type="password")
+        if st.button("Đăng nhập"):
+            if username in users and users[username] == password:
+                st.session_state.logged_in = True
+                st.session_state.username = username
+                st.success(f"Chào mừng, {username}!")
+                st.rerun()
+            else:
+                st.error("Tên đăng nhập hoặc mật khẩu không đúng.")
+
+    elif choice == "Đăng ký":
+        st.subheader("Đăng ký tài khoản mới")
+        new_user = st.text_input("Tên đăng nhập mới")
+        new_password = st.text_input("Mật khẩu mới", type="password")
+        if st.button("Đăng ký"):
+            if new_user in users:
+                st.warning("Tên đăng nhập đã tồn tại.")
+            else:
+                users[new_user] = new_password
+                st.success("Đăng ký thành công! Vui lòng đăng nhập.")
+                st.balloons()
+
 def main_app():
     st.set_page_config(layout="wide")
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
+
+    if st.button("Đăng xuất"):
+        st.session_state.logged_in = False
+        st.session_state.username = None
+        st.rerun()
 
     tab1, tab2 = st.tabs(["Tạo giao dịch", "Lịch sử & Thống kê"])
 
@@ -255,7 +297,6 @@ def main_app():
         history_and_stats_page()
 
 def create_new_transaction_page():
-    # Khởi tạo session state để giữ lại dữ liệu
     if 'ho_ten' not in st.session_state:
         st.session_state.ho_ten = ""
     if 'so_cccd' not in st.session_state:
@@ -314,6 +355,8 @@ def create_new_transaction_page():
         so_luong_input = st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong)
         don_gia_input = st.text_input("Đơn giá (VNĐ/chỉ)")
         
+        ten_don_vi = st.text_input("Tên đơn vị (không bắt buộc)")
+        
         col_submit, col_download = st.columns(2)
         with col_submit:
             submitted = st.form_submit_button("Lưu giao dịch")
@@ -330,7 +373,7 @@ def create_new_transaction_page():
                     st.metric(label="Thành Tiền", value=f"{giao_dich_data['thanh_tien']:,.0f} VNĐ")
                     st.write(f"Bằng chữ: {doc_so_thanh_chu(giao_dich_data['thanh_tien'])}")
                     
-                    pdf_bytes = tao_pdf_mau_01(giao_dich_data)
+                    pdf_bytes = tao_pdf_mau_01(giao_dich_data, ten_don_vi)
                     with col_download:
                         st.download_button(
                             "Tải bản kê PDF (Mẫu 01/TNDN)",
@@ -414,4 +457,10 @@ def history_and_stats_page():
 
 # --- Chạy ứng dụng ---
 if __name__ == "__main__":
-    main_app()
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+
+    if st.session_state.logged_in:
+        main_app()
+    else:
+        login_page()
