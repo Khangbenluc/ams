@@ -385,7 +385,7 @@ def main_app():
     with col_reset:
         if st.button("🔴 Clear Session State"):
             # Explicitly clear the session state to fix corrupted data
-            for key in st.session_state.keys():
+            for key in list(st.session_state.keys()): # Use list() to avoid issues with modifying the dictionary during iteration
                 del st.session_state[key]
             st.session_state.logged_in = True # Keep the user logged in
             st.rerun()
@@ -412,13 +412,12 @@ def create_new_transaction_page():
         "giao_dich_data": None,
         "ten_don_vi": "",
         "phuong_thuc": "Nhập thủ công",
-        "items_count": 1
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # **Cải thiện:** Luôn đảm bảo items là list of dicts.
+    # **CRITICAL FIX**: Ensure session_state.items is correctly initialized
     if 'items' not in st.session_state or not isinstance(st.session_state.items, list) or \
        (st.session_state.items and not all(isinstance(i, dict) for i in st.session_state.items)):
         st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
@@ -478,7 +477,7 @@ def create_new_transaction_page():
         
         st.markdown("---")
 
-    st.subheader("2. Nhập thông tin và lưu giao dịch 📝")
+    st.subheader("2. Nhập thông tin và lưu giao dịch �")
     st.write("**(Nếu OCR đã trích xuất được, ô tương ứng sẽ bị khóa. Nếu chưa có, bạn có thể nhập thủ công.)**")
     
     # Hiển thị tóm tắt thông tin CCCD
@@ -500,27 +499,31 @@ def create_new_transaction_page():
     # Các nút để thêm/xóa món hàng
     col_add_item, col_remove_item = st.columns([1,1])
     with col_add_item:
-        if st.button("➕ Thêm món hàng", disabled=(st.session_state.items_count >= 3)):
-            st.session_state.items_count += 1
+        if st.button("➕ Thêm món hàng", disabled=(len(st.session_state.items) >= 3)):
             st.session_state.items.append({"ten_hang": "", "so_luong": "", "don_gia": ""})
+            st.rerun()
     with col_remove_item:
-        if st.button("➖ Xóa món hàng cuối", disabled=(st.session_state.items_count <= 1)):
-            st.session_state.items_count -= 1
+        if st.button("➖ Xóa món hàng cuối", disabled=(len(st.session_state.items) <= 1)):
             st.session_state.items.pop()
+            st.rerun()
 
     # Tạo các cột nhập liệu cho từng món hàng
-    for i in range(st.session_state.items_count):
+    for i in range(len(st.session_state.items)):
         st.markdown(f"**Món hàng {i+1}**")
         cols = st.columns([2, 1, 1])
         with cols[0]:
-            st.session_state.items[i]['ten_hang'] = st.text_input(f"Tên hàng hóa", key=f"ten_hang_{i}")
+            st.session_state.items[i]['ten_hang'] = st.text_input(f"Tên hàng hóa", 
+                                                                    value=st.session_state.items[i].get('ten_hang', ''),
+                                                                    key=f"ten_hang_{i}")
         with cols[1]:
             st.session_state.items[i]['so_luong'] = st.text_input(f"Khối lượng (chỉ)", 
-                value=st.session_state.items[i]['so_luong'],
-                disabled=(i == 0 and st.session_state.phuong_thuc == "Sử dụng OCR"),
-                key=f"so_luong_{i}")
+                                                                    value=st.session_state.items[i].get('so_luong', ''),
+                                                                    disabled=(i == 0 and st.session_state.phuong_thuc == "Sử dụng OCR"),
+                                                                    key=f"so_luong_{i}")
         with cols[2]:
-            st.session_state.items[i]['don_gia'] = st.text_input(f"Đơn giá (VNĐ/chỉ)", key=f"don_gia_{i}")
+            st.session_state.items[i]['don_gia'] = st.text_input(f"Đơn giá (VNĐ/chỉ)", 
+                                                                    value=st.session_state.items[i].get('don_gia', ''),
+                                                                    key=f"don_gia_{i}")
     
     st.markdown("---")
 
@@ -562,7 +565,7 @@ def create_new_transaction_page():
     if st.button("Làm mới trang", key="refresh_button"):
         # reset keys (giữ login)
         for k in ["ho_ten", "so_cccd", "que_quan", "pdf_for_download", "giao_dich_data", "ten_don_vi", 
-                  "phuong_thuc", "items_count", "items", "ho_ten_input", "so_cccd_input", "que_quan_input", "ten_don_vi_input"]:
+                  "phuong_thuc", "items", "ho_ten_input", "so_cccd_input", "que_quan_input", "ten_don_vi_input"]:
             if k in st.session_state:
                 del st.session_state[k]
         st.rerun()
