@@ -417,9 +417,10 @@ def create_new_transaction_page():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    # **CRITICAL FIX**: Ensure session_state.items is correctly initialized
-    if 'items' not in st.session_state or not isinstance(st.session_state.items, list) or \
-       (st.session_state.items and not all(isinstance(i, dict) for i in st.session_state.items)):
+    # **BẢN SỬA QUAN TRỌNG:** Luôn đảm bảo items là list of dicts.
+    if 'items' not in st.session_state:
+        st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
+    elif not isinstance(st.session_state.items, list) or (st.session_state.items and not all(isinstance(i, dict) for i in st.session_state.items)):
         st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
 
     st.subheader("1. Chọn phương thức nhập liệu")
@@ -477,7 +478,7 @@ def create_new_transaction_page():
         
         st.markdown("---")
 
-    st.subheader("2. Nhập thông tin và lưu giao dịch �")
+    st.subheader("2. Nhập thông tin và lưu giao dịch 📝")
     st.write("**(Nếu OCR đã trích xuất được, ô tương ứng sẽ bị khóa. Nếu chưa có, bạn có thể nhập thủ công.)**")
     
     # Hiển thị tóm tắt thông tin CCCD
