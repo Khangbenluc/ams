@@ -38,6 +38,7 @@ reader = get_reader()
 # --- Kết nối SQLite ---
 conn = sqlite3.connect("lich_su_giao_dich.db", check_same_thread=False)
 c = conn.cursor()
+# Fixed syntax error in SQL query by removing a Python-style comment
 c.execute('''
 CREATE TABLE IF NOT EXISTS lich_su (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +46,6 @@ CREATE TABLE IF NOT EXISTS lich_su (
     ho_va_ten TEXT,
     so_cccd TEXT,
     que_quan TEXT,
-    # Cập nhật schema để lưu nhiều món hàng
     hang_hoa_json TEXT,
     tong_thanh_tien REAL
 )
