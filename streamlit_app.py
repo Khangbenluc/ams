@@ -583,7 +583,7 @@ def history_and_stats_page():
     df_filtered = df.copy()
     if ho_ten_search:
         df_filtered = df_filtered[df_filtered['Họ và tên'].str.contains(ho_ten_search, case=False, na=False)]
-    if cccd_search:
+    if ccd_search:
         df_filtered = df_filtered[df_filtered['Số CCCD'].str.contains(cccd_search, case=False, na=False)]
 
     st.markdown("---")
