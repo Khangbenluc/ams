@@ -17,6 +17,7 @@ import re
 import os
 import matplotlib.pyplot as plt
 import tempfile
+import json # Thêm thư viện để lưu mảng vào DB
 
 # ========== CẤU HÌNH =============
 st.set_page_config(layout="wide")
@@ -44,9 +45,9 @@ CREATE TABLE IF NOT EXISTS lich_su (
     ho_va_ten TEXT,
     so_cccd TEXT,
     que_quan TEXT,
-    khoi_luong REAL,
-    don_gia REAL,
-    thanh_tien REAL
+    # Cập nhật schema để lưu nhiều món hàng
+    hang_hoa_json TEXT,
+    tong_thanh_tien REAL
 )
 ''')
 conn.commit()
@@ -209,29 +210,42 @@ def trich_xuat_can_easy(image_bytes):
         return ""
 
 # ========== Hàm tính tiền & PDF (giữ nguyên chức năng) ==========
-def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, so_luong_str, don_gia_str):
+def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, items_list):
     try:
-        so_luong = float(str(so_luong_str).replace(',', ''))
-        don_gia = float(str(don_gia_str).replace(',', ''))
-        thanh_tien = so_luong * don_gia
+        # Tính tổng thành tiền từ list items
+        tong_thanh_tien = 0
+        hang_hoa_luu = []
+        for item in items_list:
+            so_luong = float(str(item['so_luong']).replace(',', ''))
+            don_gia = float(str(item['don_gia']).replace(',', ''))
+            thanh_tien = so_luong * don_gia
+            tong_thanh_tien += thanh_tien
+            hang_hoa_luu.append({
+                "ten": item['ten_hang'],
+                "so_luong": so_luong,
+                "don_gia": don_gia,
+                "thanh_tien": thanh_tien
+            })
 
         vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
         current_time = datetime.now(vn_timezone)
         thoi_gian_luu = current_time.strftime("%Y-%m-%d %H:%M:%S")
 
+        # Chuyển list items thành JSON string để lưu vào DB
+        hang_hoa_json = json.dumps(hang_hoa_luu)
+
         c.execute('''
-            INSERT INTO lich_su (thoi_gian, ho_va_ten, so_cccd, que_quan, khoi_luong, don_gia, thanh_tien)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (thoi_gian_luu, ho_va_ten, so_cccd, que_quan, so_luong, don_gia, thanh_tien))
+            INSERT INTO lich_su (thoi_gian, ho_va_ten, so_cccd, que_quan, hang_hoa_json, tong_thanh_tien)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (thoi_gian_luu, ho_va_ten, so_cccd, que_quan, hang_hoa_json, tong_thanh_tien))
         conn.commit()
 
         return {
             "ho_va_ten": ho_va_ten,
             "so_cccd": so_cccd,
             "que_quan": que_quan,
-            "so_luong": so_luong,
-            "don_gia": don_gia,
-            "thanh_tien": thanh_tien,
+            "items": hang_hoa_luu,
+            "tong_thanh_tien": tong_thanh_tien,
             "ngay_tao": current_time.strftime("%d/%m/%Y")
         }
     except (ValueError, TypeError) as e:
@@ -253,8 +267,11 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
+    
+    # Sử dụng font đã đăng ký
     pdf.setFont(FONT_NAME, 12)
 
+    # Vị trí cố định
     if ten_don_vi:
         pdf.drawString(20*mm, height - 15*mm, ten_don_vi.upper())
 
@@ -273,34 +290,45 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     pdf.drawString(20*mm, height - 80*mm, f"Quê quán: {data['que_quan']}")
     pdf.drawString(20*mm, height - 85*mm, f"Ngày lập: {data['ngay_tao']}")
 
-    # --- Bảng hàng hóa ---
-    y = height - 100*mm
-    pdf.rect(20*mm, y-20*mm, 170*mm, 20*mm)
-    pdf.drawString(22*mm, y - 5*mm, "STT")
-    pdf.drawString(35*mm, y - 5*mm, "Tên hàng hóa, dịch vụ")
-    pdf.drawString(100*mm, y - 5*mm, "Đơn vị tính")
-    pdf.drawString(120*mm, y - 5*mm, "Số lượng")
-    pdf.drawString(140*mm, y - 5*mm, "Đơn giá")
-    pdf.drawString(170*mm, y - 5*mm, "Thành tiền")
+    # --- Bảng hàng hóa (động) ---
+    y_start_table = height - 100*mm
+    pdf.rect(20*mm, y_start_table - (len(data['items']) + 1) * 10 * mm, 170*mm, (len(data['items']) + 1) * 10 * mm)
 
-    pdf.drawString(22*mm, y - 15*mm, "1")
-    pdf.drawString(35*mm, y - 15*mm, "Hàng hóa")
-    pdf.drawString(100*mm, y - 15*mm, "chỉ")
-    pdf.drawString(120*mm, y - 15*mm, f"{data['so_luong']:,.2f}")
-    pdf.drawString(140*mm, y - 15*mm, f"{data['don_gia']:,.0f}")
-    pdf.drawString(170*mm, y - 15*mm, f"{data['thanh_tien']:,.0f}")
+    # Vẽ tiêu đề
+    pdf.drawString(22*mm, y_start_table - 5*mm, "STT")
+    pdf.drawString(35*mm, y_start_table - 5*mm, "Tên hàng hóa, dịch vụ")
+    pdf.drawString(100*mm, y_start_table - 5*mm, "Đơn vị tính")
+    pdf.drawString(120*mm, y_start_table - 5*mm, "Số lượng")
+    pdf.drawString(140*mm, y_start_table - 5*mm, "Đơn giá")
+    pdf.drawString(170*mm, y_start_table - 5*mm, "Thành tiền")
 
+    # Vẽ các dòng hàng hóa
+    y_item = y_start_table - 15*mm
+    for i, item in enumerate(data['items']):
+        pdf.drawString(22*mm, y_item, str(i + 1))
+        
+        # Xử lý tên hàng hóa nếu quá dài
+        ten_hang = item['ten']
+        if pdf.stringWidth(ten_hang, FONT_NAME, 12) > 60*mm:
+            ten_hang = ten_hang[:int(len(ten_hang)*60/pdf.stringWidth(ten_hang, FONT_NAME, 12))] + "..."
+            
+        pdf.drawString(35*mm, y_item, ten_hang)
+        pdf.drawString(100*mm, y_item, "chỉ")
+        pdf.drawString(120*mm, y_item, f"{item['so_luong']:,.2f}")
+        pdf.drawString(140*mm, y_item, f"{item['don_gia']:,.0f}")
+        pdf.drawString(170*mm, y_item, f"{item['thanh_tien']:,.0f}")
+        y_item -= 10*mm
+    
     # --- Tổng cộng ---
-    y -= 30*mm
-    pdf.drawString(20*mm, y, f"Tổng cộng: {data['thanh_tien']:,.0f} VNĐ")
+    y = y_item - 5*mm
+    pdf.drawString(20*mm, y, f"Tổng cộng: {data['tong_thanh_tien']:,.0f} VNĐ")
 
     y -= 5*mm
-    pdf.drawString(20*mm, y, f"Bằng chữ: {doc_so_thanh_chu(data['thanh_tien'])}")
+    pdf.drawString(20*mm, y, f"Bằng chữ: {doc_so_thanh_chu(data['tong_thanh_tien'])}")
 
     # --- Xuống ngay dưới để thêm ngày tháng và chữ ký ---
     y -= 20*mm
     pdf.setFont(FONT_NAME, 11)
-    # Thay thế dòng này để hiển thị Bến Lức và ngày tháng năm hiện tại
     vn_timezone = pytz.timezone('Asia/Ho_Chi_Minh')
     current_time = datetime.now(vn_timezone)
     current_date_str = f"Bến Lức, ngày {current_time.day} tháng {current_time.month} năm {current_time.year}"
@@ -368,128 +396,140 @@ def create_new_transaction_page():
         "ho_ten": "",
         "so_cccd": "",
         "que_quan": "",
-        "so_luong": "",
         "pdf_for_download": None,
         "giao_dich_data": None,
-        "don_gia_input": "",
-        "ten_don_vi": ""
+        "ten_don_vi": "",
+        "phuong_thuc": "Nhập thủ công",
+        "items_count": 1,
+        "items": [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    st.subheader("1. Trích xuất thông tin từ ảnh 🖼️")
-    col_cccd, col_can = st.columns([1,1])
-
-    with col_cccd:
-        st.subheader("Chụp ảnh hoặc tải ảnh CCCD")
-        anh_cccd = st.camera_input("Chụp ảnh CCCD")
-        uploaded_cccd = st.file_uploader("Hoặc tải ảnh CCCD", type=["jpg", "jpeg", "png"], key="cccd_uploader")
-        if anh_cccd:
-            with st.spinner("Đang xử lý OCR CCCD..."):
-                ho_ten, so_cccd, que_quan = trich_xuat_cccd_easy(anh_cccd.read())
-            if ho_ten:
-                st.session_state.ho_ten = ho_ten
-            if so_cccd:
-                st.session_state.so_cccd = so_cccd
-            if que_quan:
-                st.session_state.que_quan = que_quan
-            st.success("Đã trích xuất thông tin CCCD!")
-            st.image(anh_cccd, use_container_width=True)
-        elif uploaded_cccd:
-            with st.spinner("Đang xử lý OCR CCCD..."):
-                ho_ten, so_cccd, que_quan = trich_xuat_cccd_easy(uploaded_cccd.read())
-            if ho_ten:
-                st.session_state.ho_ten = ho_ten
-            if so_cccd:
-                st.session_state.so_cccd = so_cccd
-            if que_quan:
-                st.session_state.que_quan = que_quan
-            st.success("Đã trích xuất thông tin CCCD!")
-            st.image(uploaded_cccd, use_container_width=True)
-
-    with col_can:
-        st.subheader("Chụp ảnh hoặc tải ảnh cân")
-        anh_can = st.camera_input("Chụp ảnh màn hình cân")
-        uploaded_can = st.file_uploader("Hoặc tải ảnh cân", type=["jpg", "jpeg", "png"], key="can_uploader")
-        if anh_can:
-            with st.spinner("Đang xử lý OCR cân..."):
-                so_luong = trich_xuat_can_easy(anh_can.read())
-            if so_luong:
-                st.session_state.so_luong = so_luong
-            st.success("Đã trích xuất khối lượng!")
-            st.image(anh_can, use_container_width=True)
-        elif uploaded_can:
-            with st.spinner("Đang xử lý OCR cân..."):
-                so_luong = trich_xuat_can_easy(uploaded_can.read())
-            if so_luong:
-                st.session_state.so_luong = so_luong
-            st.success("Đã trích xuất khối lượng!")
-            st.image(uploaded_can, use_container_width=True)
-
+    st.subheader("1. Chọn phương thức nhập liệu")
+    st.session_state.phuong_thuc = st.radio("Chọn phương thức:", ["Nhập thủ công", "Sử dụng OCR"], index=0 if st.session_state.phuong_thuc == "Nhập thủ công" else 1)
+    
     st.markdown("---")
-    st.subheader("2. Nhập đơn giá và lưu giao dịch 📝")
+    
+    # Logic OCR (chỉ hiển thị khi chọn OCR)
+    if st.session_state.phuong_thuc == "Sử dụng OCR":
+        st.subheader("Trích xuất thông tin từ ảnh 🖼️")
+        col_cccd, col_can = st.columns([1,1])
 
-    # Hiển thị tóm tắt (thông tin sẵn có)
+        with col_cccd:
+            st.subheader("Chụp ảnh hoặc tải ảnh CCCD")
+            anh_cccd = st.camera_input("Chụp ảnh CCCD")
+            uploaded_cccd = st.file_uploader("Hoặc tải ảnh CCCD", type=["jpg", "jpeg", "png"], key="cccd_uploader")
+            if anh_cccd:
+                with st.spinner("Đang xử lý OCR CCCD..."):
+                    ho_ten, so_cccd, que_quan = trich_xuat_cccd_easy(anh_cccd.read())
+                if ho_ten: st.session_state.ho_ten = ho_ten
+                if so_cccd: st.session_state.so_cccd = so_cccd
+                if que_quan: st.session_state.que_quan = que_quan
+                st.success("Đã trích xuất thông tin CCCD!")
+                st.image(anh_cccd, use_container_width=True)
+            elif uploaded_cccd:
+                with st.spinner("Đang xử lý OCR CCCD..."):
+                    ho_ten, so_cccd, que_quan = trich_xuat_cccd_easy(uploaded_cccd.read())
+                if ho_ten: st.session_state.ho_ten = ho_ten
+                if so_cccd: st.session_state.so_cccd = so_cccd
+                if que_quan: st.session_state.que_quan = que_quan
+                st.success("Đã trích xuất thông tin CCCD!")
+                st.image(uploaded_cccd, use_container_width=True)
+        
+        # Hiện tại OCR chỉ hỗ trợ 1 món, nên chỉ hiện OCR cân cho món 1
+        with col_can:
+            st.subheader("Chụp ảnh hoặc tải ảnh cân")
+            anh_can = st.camera_input("Chụp ảnh màn hình cân")
+            uploaded_can = st.file_uploader("Hoặc tải ảnh cân", type=["jpg", "jpeg", "png"], key="can_uploader")
+            if anh_can:
+                with st.spinner("Đang xử lý OCR cân..."):
+                    so_luong_item1 = trich_xuat_can_easy(anh_can.read())
+                if so_luong_item1:
+                    if len(st.session_state.items) > 0:
+                        st.session_state.items[0]['so_luong'] = so_luong_item1
+                st.success("Đã trích xuất khối lượng!")
+                st.image(anh_can, use_container_width=True)
+            elif uploaded_can:
+                with st.spinner("Đang xử lý OCR cân..."):
+                    so_luong_item1 = trich_xuat_can_easy(uploaded_can.read())
+                if so_luong_item1:
+                    if len(st.session_state.items) > 0:
+                        st.session_state.items[0]['so_luong'] = so_luong_item1
+                st.success("Đã trích xuất khối lượng!")
+                st.image(uploaded_can, use_container_width=True)
+        
+        st.markdown("---")
+
+    st.subheader("2. Nhập thông tin và lưu giao dịch 📝")
+    st.write("**(Nếu OCR đã trích xuất được, ô tương ứng sẽ bị khóa. Nếu chưa có, bạn có thể nhập thủ công.)**")
+    
+    # Hiển thị tóm tắt thông tin CCCD
     st.info(f"Họ và Tên: **{st.session_state.ho_ten}**")
     st.info(f"Số CCCD: **{st.session_state.so_cccd}**")
     st.info(f"Quê quán: **{st.session_state.que_quan}**")
-    st.info(f"Khối lượng: **{st.session_state.so_luong}** chỉ")
+    
+    # Nhập thông tin CCCD
+    ho_ten_input = st.text_input("Họ và tên người bán", value=st.session_state.ho_ten, disabled=st.session_state.phuong_thuc == "Sử dụng OCR", key="ho_ten_input")
+    so_cccd_input = st.text_input("Số CCCD", value=st.session_state.so_cccd, disabled=st.session_state.phuong_thuc == "Sử dụng OCR", key="so_cccd_input")
+    que_quan_input = st.text_area("Quê quán", value=st.session_state.que_quan, disabled=st.session_state.phuong_thuc == "Sử dụng OCR", key="que_quan_input")
+    
+    st.text_input("Tên đơn vị (không bắt buộc)", key="ten_don_vi_input")
+    
+    st.markdown("---")
+    
+    st.subheader("3. Nhập thông tin hàng hóa")
 
-    st.write("**(Nếu OCR đã trích xuất được, ô tương ứng sẽ bị khóa — không thể nhập lại. Nếu chưa có, bạn có thể nhập thủ công.)**")
+    # Các nút để thêm/xóa món hàng
+    col_add_item, col_remove_item = st.columns([1,1])
+    with col_add_item:
+        if st.button("➕ Thêm món hàng", disabled=(st.session_state.items_count >= 3)):
+            st.session_state.items_count += 1
+            st.session_state.items.append({"ten_hang": "", "so_luong": "", "don_gia": ""})
+    with col_remove_item:
+        if st.button("➖ Xóa món hàng cuối", disabled=(st.session_state.items_count <= 1)):
+            st.session_state.items_count -= 1
+            st.session_state.items.pop()
 
-    # Họ tên => khóa nếu OCR có, else cho nhập
-    if st.session_state.get("ho_ten"):
-        st.text_input("Họ và tên người bán", value=st.session_state.ho_ten, disabled=True, key="ho_ten_disabled")
-    else:
-        st.text_input("Họ và tên người bán", key="ho_ten")
-
-    # Số CCCD
-    if st.session_state.get("so_cccd"):
-        st.text_input("Số CCCD", value=st.session_state.so_cccd, disabled=True, key="so_cccd_disabled")
-    else:
-        st.text_input("Số CCCD", key="so_cccd")
-
-    # Quê quán
-    if st.session_state.get("que_quan"):
-        st.text_area("Quê quán", value=st.session_state.que_quan, disabled=True, key="que_quan_disabled")
-    else:
-        st.text_area("Quê quán", key="que_quan")
-
-    # Khối lượng (chỉ)
-    if st.session_state.get("so_luong"):
-        st.text_input("Khối lượng (chỉ)", value=st.session_state.so_luong, disabled=True, key="so_luong_disabled")
-    else:
-        st.text_input("Khối lượng (chỉ)", key="so_luong")
-
-    # Don gia and ten don vi luôn để nhập (người dùng cung cấp)
-    st.text_input("Đơn giá (VNĐ/chỉ)", key="don_gia_input")
-    st.text_input("Tên đơn vị (không bắt buộc)", key="ten_don_vi")
-
-    # Khi lưu: lấy value ưu tiên từ các key editable (nếu có), else từ disabled key
-    def _get_value(field):
-        if st.session_state.get(field):
-            return st.session_state.get(field)
-        disabled_key = field + "_disabled"
-        return st.session_state.get(disabled_key, "")
+    # Tạo các cột nhập liệu cho từng món hàng
+    for i in range(st.session_state.items_count):
+        st.markdown(f"**Món hàng {i+1}**")
+        cols = st.columns([2, 1, 1])
+        with cols[0]:
+            st.session_state.items[i]['ten_hang'] = st.text_input(f"Tên hàng hóa", key=f"ten_hang_{i}")
+        with cols[1]:
+            st.session_state.items[i]['so_luong'] = st.text_input(f"Khối lượng (chỉ)", 
+                value=st.session_state.items[i]['so_luong'],
+                disabled=(i == 0 and st.session_state.phuong_thuc == "Sử dụng OCR"),
+                key=f"so_luong_{i}")
+        with cols[2]:
+            st.session_state.items[i]['don_gia'] = st.text_input(f"Đơn giá (VNĐ/chỉ)", key=f"don_gia_{i}")
+    
+    st.markdown("---")
 
     if st.button("Lưu giao dịch"):
-        ho_va_ten = _get_value("ho_ten")
-        so_cccd_val = _get_value("so_cccd")
-        que_quan_val = _get_value("que_quan")
-        so_luong_val = _get_value("so_luong")
-        don_gia_val = st.session_state.get("don_gia_input", "")
+        # Lấy giá trị từ input hoặc session_state
+        ho_va_ten = ho_ten_input if st.session_state.phuong_thuc == "Nhập thủ công" else st.session_state.ho_ten
+        so_cccd_val = so_cccd_input if st.session_state.phuong_thuc == "Nhập thủ công" else st.session_state.so_cccd
+        que_quan_val = que_quan_input if st.session_state.phuong_thuc == "Nhập thủ công" else st.session_state.que_quan
+        ten_don_vi_val = st.session_state.ten_don_vi_input
 
-        if not ho_va_ten or not so_luong_val or not don_gia_val:
-            st.error("Vui lòng đảm bảo đã trích xuất/nhập Họ tên, Khối lượng và nhập đơn giá trước khi lưu.")
+        # Lấy danh sách items đã nhập
+        items_list = st.session_state.items
+        
+        # Kiểm tra dữ liệu bắt buộc
+        valid_items = [item for item in items_list if item['ten_hang'] and item['so_luong'] and item['don_gia']]
+        if not ho_va_ten or not so_cccd_val or not valid_items:
+             st.error("Vui lòng đảm bảo đã nhập đầy đủ Họ tên, Số CCCD và ít nhất một món hàng.")
         else:
-            giao_dich_data = xu_ly_giao_dich(ho_va_ten, so_cccd_val, que_quan_val, so_luong_val, don_gia_val)
+            giao_dich_data = xu_ly_giao_dich(ho_va_ten, so_cccd_val, que_quan_val, valid_items)
             if giao_dich_data:
                 st.success("Giao dịch đã được lưu thành công!")
-                st.metric(label="Thành Tiền", value=f"{giao_dich_data['thanh_tien']:,.0f} VNĐ")
-                st.write(f"Bằng chữ: {doc_so_thanh_chu(giao_dich_data['thanh_tien'])}")
+                st.metric(label="Tổng Thành Tiền", value=f"{giao_dich_data['tong_thanh_tien']:,.0f} VNĐ")
+                st.write(f"Bằng chữ: {doc_so_thanh_chu(giao_dich_data['tong_thanh_tien'])}")
 
-                pdf_buffer = tao_pdf_mau_01(giao_dich_data, st.session_state.get("ten_don_vi", ""))
+                pdf_buffer = tao_pdf_mau_01(giao_dich_data, ten_don_vi_val)
                 st.session_state.pdf_for_download = pdf_buffer
                 st.session_state.giao_dich_data = giao_dich_data
 
@@ -501,23 +541,38 @@ def create_new_transaction_page():
             file_name=f"bang_ke_{(st.session_state.giao_dich_data['ho_va_ten']).replace(' ', '_')}.pdf",
             mime="application/pdf"
         )
-
+    
     st.markdown("---")
     if st.button("Làm mới trang"):
         # reset keys (giữ login)
-        for k in ["ho_ten", "so_cccd", "que_quan", "so_luong", "pdf_for_download", "giao_dich_data", "don_gia_input", "ten_don_vi",
-                    "ho_ten_disabled", "so_cccd_disabled", "que_quan_disabled", "so_luong_disabled"]:
+        for k in ["ho_ten", "so_cccd", "que_quan", "pdf_for_download", "giao_dich_data", "ten_don_vi", 
+                  "phuong_thuc", "items_count", "items", "ho_ten_input", "so_cccd_input", "que_quan_input", "ten_don_vi_input"]:
             if k in st.session_state:
                 del st.session_state[k]
-        st.experimental_rerun()
+        st.rerun()
 
 def history_and_stats_page():
     st.header("Lịch sử và Thống kê")
     df = pd.read_sql_query("SELECT * FROM lich_su ORDER BY thoi_gian DESC", conn)
+    
     if df.empty:
         st.info("Chưa có giao dịch nào được ghi lại.")
         return
 
+    # Sửa tên cột
+    df = df.rename(columns={
+        'id': 'ID',
+        'thoi_gian': 'Thời gian',
+        'ho_va_ten': 'Họ và tên',
+        'so_cccd': 'Số CCCD',
+        'que_quan': 'Quê quán',
+        'hang_hoa_json': 'Hàng hóa',
+        'tong_thanh_tien': 'Thành tiền'
+    })
+
+    # Cột 'Hàng hóa' sẽ là JSON string, cần parse để hiển thị
+    df['Hàng hóa'] = df['Hàng hóa'].apply(lambda x: json.loads(x) if pd.notnull(x) else [])
+    
     st.subheader("Bộ lọc")
     col1, col2 = st.columns(2)
     with col1:
@@ -527,65 +582,94 @@ def history_and_stats_page():
 
     df_filtered = df.copy()
     if ho_ten_search:
-        df_filtered = df_filtered[df_filtered['ho_va_ten'].str.contains(ho_ten_search, case=False, na=False)]
+        df_filtered = df_filtered[df_filtered['Họ và tên'].str.contains(ho_ten_search, case=False, na=False)]
     if cccd_search:
-        df_filtered = df_filtered[df_filtered['so_cccd'].str.contains(cccd_search, case=False, na=False)]
+        df_filtered = df_filtered[df_filtered['Số CCCD'].str.contains(cccd_search, case=False, na=False)]
 
     st.markdown("---")
     st.subheader("Thống kê")
-    col_stats1, col_stats2, col_stats3 = st.columns(3)
+    col_stats1, col_stats2 = st.columns(2)
     with col_stats1:
         tong_giao_dich = len(df_filtered)
         st.metric("Tổng giao dịch", value=f"{tong_giao_dich}")
     with col_stats2:
-        tong_thanh_tien = df_filtered['thanh_tien'].sum()
+        tong_thanh_tien = df_filtered['Thành tiền'].sum()
         st.metric("Tổng thành tiền", value=f"{tong_thanh_tien:,.0f} VNĐ")
-    with col_stats3:
-        tong_khoi_luong = df_filtered['khoi_luong'].sum()
-        st.metric("Tổng khối lượng", value=f"{tong_khoi_luong} chỉ")
 
     st.markdown("---")
     st.subheader("Biểu đồ doanh thu")
-    df_filtered['thoi_gian'] = pd.to_datetime(df_filtered['thoi_gian'])
-    df_filtered['ngay'] = df_filtered['thoi_gian'].dt.date
-    daily_revenue = df_filtered.groupby('ngay')['thanh_tien'].sum()
-    fig, ax = plt.subplots()
-    ax.bar(daily_revenue.index.astype(str), daily_revenue.values)
+    df_filtered['Thời gian'] = pd.to_datetime(df_filtered['Thời gian'])
+    df_filtered['Ngày'] = df_filtered['Thời gian'].dt.date
+    daily_revenue = df_filtered.groupby('Ngày')['Thành tiền'].sum()
+    
+    fig, ax = plt.subplots(figsize=(10, 5))
+    daily_revenue.plot(kind='line', ax=ax, marker='o')
+    
     ax.set_title("Doanh thu hàng ngày")
+    ax.set_xlabel("Ngày")
     ax.set_ylabel("Thành tiền (VNĐ)")
-    ax.tick_params(axis='x', rotation=45, labelsize=8)
+    
+    # Định dạng trục y để hiển thị số lớn dễ đọc hơn
+    formatter = plt.FuncFormatter(lambda x, p: f'{x:,.0f}')
+    ax.yaxis.set_major_formatter(formatter)
+    
+    plt.xticks(rotation=45)
     plt.tight_layout()
     st.pyplot(fig)
+    
     st.markdown("---")
     st.subheader("Lịch sử giao dịch")
-    st.dataframe(df_filtered)
+    st.dataframe(df_filtered, hide_index=True)
 
     # Cho phép chọn 1 dòng để edit hoặc xóa
     st.markdown("**Chỉnh sửa / Xóa 1 bản ghi**")
-    ids = df_filtered['id'].astype(str).tolist()
+    ids = df_filtered['ID'].astype(str).tolist()
     chosen = st.selectbox("Chọn ID để chỉnh sửa/xóa", [""] + ids)
+    
     if chosen:
-        row = df_filtered[df_filtered['id'].astype(str) == chosen].iloc[0]
-        edit_col1, edit_col2 = st.columns(2)
-        with edit_col1:
-            e_name = st.text_input("Họ và tên", value=row['ho_va_ten'])
-        e_cccd = st.text_input("Số CCCD", value=row['so_cccd'])
-        e_qq = st.text_area("Quê quán", value=row['que_quan'])
-        with edit_col2:
-            e_khoi = st.text_input("Khối lượng (chỉ)", value=str(row['khoi_luong']))
-            e_dongia = st.text_input("Đơn giá (VNĐ/chỉ)", value=str(row['don_gia']))
+        row = df_filtered[df_filtered['ID'].astype(str) == chosen].iloc[0]
+        st.markdown(f"**Đang chỉnh sửa bản ghi ID: {chosen}**")
+        e_name = st.text_input("Họ và tên", value=row['Họ và tên'], key=f"edit_name_{chosen}")
+        e_cccd = st.text_input("Số CCCD", value=row['Số CCCD'], key=f"edit_cccd_{chosen}")
+        e_qq = st.text_area("Quê quán", value=row['Quê quán'], key=f"edit_qq_{chosen}")
+        
+        # Hiển thị và cho phép chỉnh sửa các món hàng
+        edited_items = st.session_state.get(f"edited_items_{chosen}", row['Hàng hóa'])
+        st.session_state[f"edited_items_{chosen}"] = edited_items
+        
+        st.subheader("Chỉnh sửa các món hàng")
+        for i, item in enumerate(edited_items):
+            st.markdown(f"**Món hàng {i+1}**")
+            cols = st.columns([2, 1, 1])
+            with cols[0]:
+                item['ten'] = st.text_input(f"Tên hàng hóa", value=item.get('ten', ''), key=f"edit_ten_{chosen}_{i}")
+            with cols[1]:
+                item['so_luong'] = st.text_input(f"Khối lượng (chỉ)", value=str(item.get('so_luong', 0)), key=f"edit_sl_{chosen}_{i}")
+            with cols[2]:
+                item['don_gia'] = st.text_input(f"Đơn giá (VNĐ/chỉ)", value=str(item.get('don_gia', 0)), key=f"edit_dg_{chosen}_{i}")
+
         if st.button("Cập nhật bản ghi"):
             try:
+                # Tính lại tổng thành tiền
+                new_items = st.session_state[f"edited_items_{chosen}"]
+                new_tong_tien = 0
+                for item in new_items:
+                    new_tong_tien += float(item.get('so_luong', 0)) * float(item.get('don_gia', 0))
+                
+                # Chuyển về JSON
+                new_items_json = json.dumps(new_items)
+                
                 c.execute('''
                     UPDATE lich_su
-                    SET ho_va_ten=?, so_cccd=?, que_quan=?, khoi_luong=?, don_gia=?, thanh_tien=?
+                    SET ho_va_ten=?, so_cccd=?, que_quan=?, hang_hoa_json=?, tong_thanh_tien=?
                     WHERE id=?
-                ''', (e_name, e_cccd, e_qq, float(e_khoi), float(e_dongia), float(e_khoi)*float(e_dongia), int(chosen)))
+                ''', (e_name, e_cccd, e_qq, new_items_json, new_tong_tien, int(chosen)))
                 conn.commit()
                 st.success("Cập nhật thành công.")
                 st.experimental_rerun()
             except Exception as ex:
                 st.error(f"Lỗi cập nhật: {ex}")
+
         if st.button("Xóa bản ghi"):
             try:
                 c.execute('DELETE FROM lich_su WHERE id=?', (int(chosen),))
