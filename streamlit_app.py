@@ -379,6 +379,25 @@ def main_app():
     st.set_page_config(layout="wide")
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
+
+    # KHẮC PHỤC LỖI TRIỆT ĐỂ: Luôn đảm bảo `st.session_state.items` là một danh sách hợp lệ
+    if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
+        st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
+    
+    # Khởi tạo các biến session_state mặc định khác
+    defaults = {
+        "ho_ten": "",
+        "so_cccd": "",
+        "que_quan": "",
+        "pdf_for_download": None,
+        "giao_dich_data": None,
+        "ten_don_vi": "",
+        "phuong_thuc": "Nhập thủ công"
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
     
     col_reset, col_logout = st.columns([1,1])
     with col_reset:
@@ -404,24 +423,6 @@ def main_app():
         history_and_stats_page()
 
 def create_new_transaction_page():
-    # SỬA LỖI: Luôn đảm bảo st.session_state.items là một list
-    if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
-        st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
-
-    # Khởi tạo các biến session_state mặc định khác
-    defaults = {
-        "ho_ten": "",
-        "so_cccd": "",
-        "que_quan": "",
-        "pdf_for_download": None,
-        "giao_dich_data": None,
-        "ten_don_vi": "",
-        "phuong_thuc": "Nhập thủ công"
-    }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
-
     st.subheader("1. Chọn phương thức nhập liệu")
     st.session_state.phuong_thuc = st.radio("Chọn phương thức:", ["Nhập thủ công", "Sử dụng OCR"], index=0 if st.session_state.phuong_thuc == "Nhập thủ công" else 1)
     
