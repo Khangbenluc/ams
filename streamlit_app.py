@@ -38,7 +38,6 @@ reader = get_reader()
 # --- Kết nối SQLite ---
 conn = sqlite3.connect("lich_su_giao_dich.db", check_same_thread=False)
 c = conn.cursor()
-# Fixed syntax error in SQL query by removing a Python-style comment
 c.execute('''
 CREATE TABLE IF NOT EXISTS lich_su (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -405,7 +404,11 @@ def main_app():
         history_and_stats_page()
 
 def create_new_transaction_page():
-    # Khởi tạo session_state mặc định
+    # SỬA LỖI: Luôn đảm bảo st.session_state.items là một list
+    if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
+        st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
+
+    # Khởi tạo các biến session_state mặc định khác
     defaults = {
         "ho_ten": "",
         "so_cccd": "",
@@ -413,8 +416,7 @@ def create_new_transaction_page():
         "pdf_for_download": None,
         "giao_dich_data": None,
         "ten_don_vi": "",
-        "phuong_thuc": "Nhập thủ công",
-        "items": [{"ten_hang": "", "so_luong": "", "don_gia": ""}] # Khởi tạo items ngay tại đây
+        "phuong_thuc": "Nhập thủ công"
     }
     for k, v in defaults.items():
         if k not in st.session_state:
