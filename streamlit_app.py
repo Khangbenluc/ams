@@ -17,7 +17,7 @@ import re
 import os
 import matplotlib.pyplot as plt
 import tempfile
-import json # Thêm thư viện để lưu mảng vào DB
+import json
 
 # ========== CẤU HÌNH =============
 st.set_page_config(layout="wide")
@@ -514,17 +514,17 @@ def create_new_transaction_page():
         cols = st.columns([2, 1, 1])
         with cols[0]:
             st.session_state.items[i]['ten_hang'] = st.text_input(f"Tên hàng hóa", 
-                                                                    value=st.session_state.items[i].get('ten_hang', ''),
-                                                                    key=f"ten_hang_{i}")
+                                                                 value=st.session_state.items[i].get('ten_hang', ''),
+                                                                 key=f"ten_hang_{i}")
         with cols[1]:
             st.session_state.items[i]['so_luong'] = st.text_input(f"Khối lượng (chỉ)", 
-                                                                    value=st.session_state.items[i].get('so_luong', ''),
-                                                                    disabled=(i == 0 and st.session_state.phuong_thuc == "Sử dụng OCR"),
-                                                                    key=f"so_luong_{i}")
+                                                                 value=st.session_state.items[i].get('so_luong', ''),
+                                                                 disabled=(i == 0 and st.session_state.phuong_thuc == "Sử dụng OCR"),
+                                                                 key=f"so_luong_{i}")
         with cols[2]:
             st.session_state.items[i]['don_gia'] = st.text_input(f"Đơn giá (VNĐ/chỉ)", 
-                                                                    value=st.session_state.items[i].get('don_gia', ''),
-                                                                    key=f"don_gia_{i}")
+                                                                 value=st.session_state.items[i].get('don_gia', ''),
+                                                                 key=f"don_gia_{i}")
     
     st.markdown("---")
 
@@ -598,12 +598,12 @@ def history_and_stats_page():
     with col1:
         ho_ten_search = st.text_input("Tìm kiếm theo tên khách hàng")
     with col2:
-        cccd_search = st.text_input("Tìm kiếm theo CCCD")
+        cccd_search = st.text_input("Tìm kiếm theo CCCD") # fixed typo from 'ccd_search'
 
     df_filtered = df.copy()
     if ho_ten_search:
         df_filtered = df_filtered[df_filtered['Họ và tên'].str.contains(ho_ten_search, case=False, na=False)]
-    if ccd_search:
+    if cccd_search: # fixed typo here as well
         df_filtered = df_filtered[df_filtered['Số CCCD'].str.contains(cccd_search, case=False, na=False)]
 
     st.markdown("---")
@@ -686,7 +686,7 @@ def history_and_stats_page():
                 ''', (e_name, e_cccd, e_qq, new_items_json, new_tong_tien, int(chosen)))
                 conn.commit()
                 st.success("Cập nhật thành công.")
-                st.experimental_rerun()
+                st.rerun() # Replaced st.experimental_rerun()
             except Exception as ex:
                 st.error(f"Lỗi cập nhật: {ex}")
 
@@ -695,7 +695,7 @@ def history_and_stats_page():
                 c.execute('DELETE FROM lich_su WHERE id=?', (int(chosen),))
                 conn.commit()
                 st.success("Đã xóa bản ghi.")
-                st.experimental_rerun()
+                st.rerun() # Replaced st.experimental_rerun()
             except Exception as ex:
                 st.error(f"Lỗi xóa: {ex}")
 
