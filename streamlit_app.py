@@ -388,6 +388,8 @@ def main_app():
             for key in list(st.session_state.keys()): # Use list() to avoid issues with modifying the dictionary during iteration
                 del st.session_state[key]
             st.session_state.logged_in = True # Keep the user logged in
+            # Thêm dòng này để đảm bảo items được khởi tạo lại đúng cách sau khi xóa
+            st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
             st.rerun()
 
     with col_logout:
@@ -412,15 +414,11 @@ def create_new_transaction_page():
         "giao_dich_data": None,
         "ten_don_vi": "",
         "phuong_thuc": "Nhập thủ công",
+        "items": [{"ten_hang": "", "so_luong": "", "don_gia": ""}] # Khởi tạo items ngay tại đây
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
-
-    # **CRITICAL FIX**: Ensure session_state.items is correctly initialized
-    if 'items' not in st.session_state or not isinstance(st.session_state.items, list) or \
-       (st.session_state.items and not all(isinstance(i, dict) for i in st.session_state.items)):
-        st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
 
     st.subheader("1. Chọn phương thức nhập liệu")
     st.session_state.phuong_thuc = st.radio("Chọn phương thức:", ["Nhập thủ công", "Sử dụng OCR"], index=0 if st.session_state.phuong_thuc == "Nhập thủ công" else 1)
