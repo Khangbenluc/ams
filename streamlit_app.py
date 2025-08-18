@@ -400,12 +400,16 @@ def create_new_transaction_page():
         "giao_dich_data": None,
         "ten_don_vi": "",
         "phuong_thuc": "Nhập thủ công",
-        "items_count": 1,
-        "items": [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
+        "items_count": 1
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
+
+    # **Cải thiện:** Luôn đảm bảo items là list of dicts.
+    if 'items' not in st.session_state or not isinstance(st.session_state.items, list) or \
+       (st.session_state.items and not isinstance(st.session_state.items[0], dict)):
+        st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
 
     st.subheader("1. Chọn phương thức nhập liệu")
     st.session_state.phuong_thuc = st.radio("Chọn phương thức:", ["Nhập thủ công", "Sử dụng OCR"], index=0 if st.session_state.phuong_thuc == "Nhập thủ công" else 1)
@@ -543,7 +547,7 @@ def create_new_transaction_page():
         )
     
     st.markdown("---")
-    if st.button("Làm mới trang"):
+    if st.button("Làm mới trang", key="refresh_button"):
         # reset keys (giữ login)
         for k in ["ho_ten", "so_cccd", "que_quan", "pdf_for_download", "giao_dich_data", "ten_don_vi", 
                   "phuong_thuc", "items_count", "items", "ho_ten_input", "so_cccd_input", "que_quan_input", "ten_don_vi_input"]:
