@@ -380,10 +380,22 @@ def main_app():
     st.set_page_config(layout="wide")
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
-    if st.button("Đăng xuất"):
-        st.session_state.logged_in = False
-        st.session_state.username = None
-        st.rerun()
+    
+    col_reset, col_logout = st.columns([1,1])
+    with col_reset:
+        if st.button("🔴 Clear Session State"):
+            # Explicitly clear the session state to fix corrupted data
+            for key in st.session_state.keys():
+                del st.session_state[key]
+            st.session_state.logged_in = True # Keep the user logged in
+            st.rerun()
+
+    with col_logout:
+        if st.button("Đăng xuất"):
+            st.session_state.logged_in = False
+            st.session_state.username = None
+            st.rerun()
+
     tab1, tab2 = st.tabs(["Tạo giao dịch", "Lịch sử & Thống kê"])
     with tab1:
         create_new_transaction_page()
@@ -408,7 +420,7 @@ def create_new_transaction_page():
 
     # **Cải thiện:** Luôn đảm bảo items là list of dicts.
     if 'items' not in st.session_state or not isinstance(st.session_state.items, list) or \
-       (st.session_state.items and not isinstance(st.session_state.items[0], dict)):
+       (st.session_state.items and not all(isinstance(i, dict) for i in st.session_state.items)):
         st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
 
     st.subheader("1. Chọn phương thức nhập liệu")
