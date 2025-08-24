@@ -379,31 +379,27 @@ def main_app():
     st.set_page_config(layout="wide")
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
-    
-    # FIX: Initialize all session state variables at the start of the app
-    # to ensure they are always present, preventing the TypeError.
+
+    # FIX: Initialize all session state variables with setdefault
+    # This ensures they are always present, preventing the TypeError.
     st.session_state.setdefault('items', [{"ten_hang": "", "so_luong": "", "don_gia": ""}])
     st.session_state.setdefault("ho_ten", "")
     st.session_state.setdefault("so_cccd", "")
     st.session_state.setdefault("que_quan", "")
     st.session_state.setdefault("pdf_for_download", None)
     st.session_state.setdefault("giao_dich_data", None)
-    st.session_state.setdefault("ten_don_vi_input", "") # Updated key to match the widget key
+    st.session_state.setdefault("ten_don_vi_input", "")
     st.session_state.setdefault("phuong_thuc", "Nhập thủ công")
 
     col_reset, col_logout = st.columns([1,1])
     with col_reset:
         if st.button("🔴 Clear Session State"):
-            # Explicitly clear the session state to fix corrupted data
-            for key in list(st.session_state.keys()): # Use list() to avoid issues with modifying the dictionary during iteration
-                # Keep 'logged_in' and 'username'
-                if key not in ['logged_in', 'username']:
-                    del st.session_state[key]
-
-            # Re-initialize the necessary variables
+            # Explicitly reset the session state to fix corrupted data
             st.session_state.ho_ten = ""
             st.session_state.so_cccd = ""
             st.session_state.que_quan = ""
+            st.session_state.pdf_for_download = None
+            st.session_state.giao_dich_data = None
             st.session_state.ten_don_vi_input = ""
             st.session_state.phuong_thuc = "Nhập thủ công"
             st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
@@ -501,11 +497,11 @@ def create_new_transaction_page():
     with col_add_item:
         if st.button("➕ Thêm món hàng", disabled=(len(st.session_state.items) >= 3)):
             st.session_state.items.append({"ten_hang": "", "so_luong": "", "don_gia": ""})
-            st.rerun() # Use rerun to update the UI
+            st.rerun()
     with col_remove_item:
         if st.button("➖ Xóa món hàng cuối", disabled=(len(st.session_state.items) <= 1)):
             st.session_state.items.pop()
-            st.rerun() # Use rerun to update the UI
+            st.rerun()
 
     # Tạo các cột nhập liệu cho từng món hàng
     for i in range(len(st.session_state.items)):
@@ -597,12 +593,11 @@ def history_and_stats_page():
     with col1:
         ho_ten_search = st.text_input("Tìm kiếm theo tên khách hàng")
     with col2:
-        cccd_search = st.text_input("Tìm kiếm theo CCCD") # fixed typo from 'ccd_search'
-
+        cccd_search = st.text_input("Tìm kiếm theo CCCD")
     df_filtered = df.copy()
     if ho_ten_search:
         df_filtered = df_filtered[df_filtered['Họ và tên'].str.contains(ho_ten_search, case=False, na=False)]
-    if cccd_search: # fixed typo here as well
+    if cccd_search:
         df_filtered = df_filtered[df_filtered['Số CCCD'].str.contains(cccd_search, case=False, na=False)]
 
     st.markdown("---")
@@ -685,7 +680,7 @@ def history_and_stats_page():
                 ''', (e_name, e_cccd, e_qq, new_items_json, new_tong_tien, int(chosen)))
                 conn.commit()
                 st.success("Cập nhật thành công.")
-                st.rerun() # Replaced st.experimental_rerun()
+                st.rerun()
             except Exception as ex:
                 st.error(f"Lỗi cập nhật: {ex}")
 
@@ -694,7 +689,7 @@ def history_and_stats_page():
                 c.execute('DELETE FROM lich_su WHERE id=?', (int(chosen),))
                 conn.commit()
                 st.success("Đã xóa bản ghi.")
-                st.rerun() # Replaced st.experimental_rerun()
+                st.rerun()
             except Exception as ex:
                 st.error(f"Lỗi xóa: {ex}")
 
