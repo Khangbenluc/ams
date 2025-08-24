@@ -19,8 +19,19 @@ import matplotlib.pyplot as plt
 import tempfile
 import json
 
-# ========== CẤU HÌNH =============
+# ============= CẤU HÌNH & KHỞI TẠO TRẠNG THÁI PHIÊN (RẤT QUAN TRỌNG) =============
+# Đây là cách đúng để đảm bảo các biến session state luôn được khởi tạo
 st.set_page_config(layout="wide")
+st.session_state.setdefault('logged_in', False)
+st.session_state.setdefault('username', None)
+st.session_state.setdefault('items', [{"ten_hang": "", "so_luong": "", "don_gia": ""}])
+st.session_state.setdefault("ho_ten", "")
+st.session_state.setdefault("so_cccd", "")
+st.session_state.setdefault("que_quan", "")
+st.session_state.setdefault("pdf_for_download", None)
+st.session_state.setdefault("giao_dich_data", None)
+st.session_state.setdefault("ten_don_vi_input", "")
+st.session_state.setdefault("phuong_thuc", "Nhập thủ công")
 
 # --- Quản lý người dùng (đơn giản, demo) ---
 users = {
@@ -376,33 +387,18 @@ def login_page():
                 st.balloons()
 
 def main_app():
-    st.set_page_config(layout="wide")
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
-
-    # FIX: Initialize all session state variables with setdefault
-    # This ensures they are always present, preventing the TypeError.
-    st.session_state.setdefault('items', [{"ten_hang": "", "so_luong": "", "don_gia": ""}])
-    st.session_state.setdefault("ho_ten", "")
-    st.session_state.setdefault("so_cccd", "")
-    st.session_state.setdefault("que_quan", "")
-    st.session_state.setdefault("pdf_for_download", None)
-    st.session_state.setdefault("giao_dich_data", None)
-    st.session_state.setdefault("ten_don_vi_input", "")
-    st.session_state.setdefault("phuong_thuc", "Nhập thủ công")
 
     col_reset, col_logout = st.columns([1,1])
     with col_reset:
         if st.button("🔴 Clear Session State"):
-            # Explicitly reset the session state to fix corrupted data
-            st.session_state.ho_ten = ""
-            st.session_state.so_cccd = ""
-            st.session_state.que_quan = ""
-            st.session_state.pdf_for_download = None
-            st.session_state.giao_dich_data = None
-            st.session_state.ten_don_vi_input = ""
-            st.session_state.phuong_thuc = "Nhập thủ công"
-            st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
+            # Explicitly reset the session state by deleting keys
+            keys_to_delete = ["ho_ten", "so_cccd", "que_quan", "pdf_for_download", "giao_dich_data", 
+                              "ten_don_vi_input", "phuong_thuc", "items"]
+            for k in keys_to_delete:
+                if k in st.session_state:
+                    del st.session_state[k]
             st.rerun()
 
     with col_logout:
@@ -560,8 +556,9 @@ def create_new_transaction_page():
     st.markdown("---")
     if st.button("Làm mới trang", key="refresh_button"):
         # reset keys (giữ login)
-        for k in ["ho_ten", "so_cccd", "que_quan", "pdf_for_download", "giao_dich_data", "ten_don_vi_input", 
-                  "phuong_thuc", "items", "ho_ten_input", "so_cccd_input", "que_quan_input"]:
+        keys_to_delete = ["ho_ten", "so_cccd", "que_quan", "pdf_for_download", "giao_dich_data", 
+                              "ten_don_vi_input", "phuong_thuc", "items"]
+        for k in keys_to_delete:
             if k in st.session_state:
                 del st.session_state[k]
         st.rerun()
@@ -696,10 +693,9 @@ def history_and_stats_page():
     csv_file = df_filtered.to_csv(index=False)
     st.download_button(label="Tải xuống CSV", data=csv_file, file_name='lich_su_giao_dich.csv', mime='text/csv')
 
-# --- Chạy ứng dụng ---
+
+# ============= ĐIỂM BẮT ĐẦU CHẠY ỨNG DỤNG =============
 if __name__ == "__main__":
-    if "logged_in" not in st.session_state:
-        st.session_state.logged_in = False
     if st.session_state.logged_in:
         main_app()
     else:
