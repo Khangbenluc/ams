@@ -19,8 +19,20 @@ import matplotlib.pyplot as plt
 import tempfile
 import json
 
-# ============= CẤU HÌNH =============
+# ============= CẤU HÌNH & KHỞI TẠO TRẠNG THÁI PHIÊN (RẤT QUAN TRỌNG) =============
+# Đây là cách đúng để đảm bảo các biến session state luôn được khởi tạo.
+# Đặt ở đầu file để đảm bảo chúng tồn tại trước mọi thứ.
 st.set_page_config(layout="wide")
+st.session_state.setdefault('logged_in', False)
+st.session_state.setdefault('username', None)
+st.session_state.setdefault('items', [{"ten_hang": "", "so_luong": "", "don_gia": ""}])
+st.session_state.setdefault("ho_ten", "")
+st.session_state.setdefault("so_cccd", "")
+st.session_state.setdefault("que_quan", "")
+st.session_state.setdefault("pdf_for_download", None)
+st.session_state.setdefault("giao_dich_data", None)
+st.session_state.setdefault("ten_don_vi_input", "")
+st.session_state.setdefault("phuong_thuc", "Nhập thủ công")
 
 # --- Quản lý người dùng (đơn giản, demo) ---
 users = {
@@ -346,6 +358,17 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     buffer.seek(0)
     return buffer
 
+def add_item():
+    """Hàm thêm một món hàng mới vào session_state."""
+    if len(st.session_state.items) < 3:
+        st.session_state.items.append({"ten_hang": "", "so_luong": "", "don_gia": ""})
+        # st.rerun() # Không cần rerun ở đây vì nút button sẽ tự động rerun
+def remove_item():
+    """Hàm xóa món hàng cuối cùng khỏi session_state."""
+    if len(st.session_state.items) > 1:
+        st.session_state.items.pop()
+        # st.rerun() # Không cần rerun ở đây
+
 # ========== GIAO DIỆN ==========
 def login_page():
     st.title("Đăng nhập/Đăng ký")
@@ -376,18 +399,6 @@ def login_page():
                 st.balloons()
 
 def main_app():
-    # Khởi tạo các biến session_state cần thiết ngay trong hàm này
-    st.session_state.setdefault('logged_in', False)
-    st.session_state.setdefault('username', None)
-    st.session_state.setdefault('items', [{"ten_hang": "", "so_luong": "", "don_gia": ""}])
-    st.session_state.setdefault("ho_ten", "")
-    st.session_state.setdefault("so_cccd", "")
-    st.session_state.setdefault("que_quan", "")
-    st.session_state.setdefault("pdf_for_download", None)
-    st.session_state.setdefault("giao_dich_data", None)
-    st.session_state.setdefault("ten_don_vi_input", "")
-    st.session_state.setdefault("phuong_thuc", "Nhập thủ công")
-
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
 
@@ -415,10 +426,6 @@ def main_app():
         history_and_stats_page()
 
 def create_new_transaction_page():
-    # Đảm bảo st.session_state.items luôn là list
-    if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
-        st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
-    
     st.subheader("1. Chọn phương thức nhập liệu")
     st.session_state.phuong_thuc = st.radio("Chọn phương thức:", ["Nhập thủ công", "Sử dụng OCR"], index=0 if st.session_state.phuong_thuc == "Nhập thủ công" else 1)
     
@@ -496,13 +503,9 @@ def create_new_transaction_page():
     # Các nút để thêm/xóa món hàng
     col_add_item, col_remove_item = st.columns([1,1])
     with col_add_item:
-        if st.button("➕ Thêm món hàng", disabled=(len(st.session_state.items) >= 3)):
-            st.session_state.items.append({"ten_hang": "", "so_luong": "", "don_gia": ""})
-            st.rerun()
+        st.button("➕ Thêm món hàng", on_click=add_item, disabled=(len(st.session_state.items) >= 3))
     with col_remove_item:
-        if st.button("➖ Xóa món hàng cuối", disabled=(len(st.session_state.items) <= 1)):
-            st.session_state.items.pop()
-            st.rerun()
+        st.button("➖ Xóa món hàng cuối", on_click=remove_item, disabled=(len(st.session_state.items) <= 1))
 
     # Tạo các cột nhập liệu cho từng món hàng
     for i in range(len(st.session_state.items)):
@@ -701,9 +704,6 @@ def history_and_stats_page():
 
 # ============= ĐIỂM BẮT ĐẦU CHẠY ỨNG DỤNG =============
 if __name__ == "__main__":
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-    
     if st.session_state.logged_in:
         main_app()
     else:
