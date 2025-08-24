@@ -19,19 +19,8 @@ import matplotlib.pyplot as plt
 import tempfile
 import json
 
-# ============= CẤU HÌNH & KHỞI TẠO TRẠNG THÁI PHIÊN (RẤT QUAN TRỌNG) =============
-# Đây là cách đúng để đảm bảo các biến session state luôn được khởi tạo
+# ============= CẤU HÌNH =============
 st.set_page_config(layout="wide")
-st.session_state.setdefault('logged_in', False)
-st.session_state.setdefault('username', None)
-st.session_state.setdefault('items', [{"ten_hang": "", "so_luong": "", "don_gia": ""}])
-st.session_state.setdefault("ho_ten", "")
-st.session_state.setdefault("so_cccd", "")
-st.session_state.setdefault("que_quan", "")
-st.session_state.setdefault("pdf_for_download", None)
-st.session_state.setdefault("giao_dich_data", None)
-st.session_state.setdefault("ten_don_vi_input", "")
-st.session_state.setdefault("phuong_thuc", "Nhập thủ công")
 
 # --- Quản lý người dùng (đơn giản, demo) ---
 users = {
@@ -387,6 +376,18 @@ def login_page():
                 st.balloons()
 
 def main_app():
+    # Khởi tạo các biến session_state cần thiết ngay trong hàm này
+    st.session_state.setdefault('logged_in', False)
+    st.session_state.setdefault('username', None)
+    st.session_state.setdefault('items', [{"ten_hang": "", "so_luong": "", "don_gia": ""}])
+    st.session_state.setdefault("ho_ten", "")
+    st.session_state.setdefault("so_cccd", "")
+    st.session_state.setdefault("que_quan", "")
+    st.session_state.setdefault("pdf_for_download", None)
+    st.session_state.setdefault("giao_dich_data", None)
+    st.session_state.setdefault("ten_don_vi_input", "")
+    st.session_state.setdefault("phuong_thuc", "Nhập thủ công")
+
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
 
@@ -414,6 +415,10 @@ def main_app():
         history_and_stats_page()
 
 def create_new_transaction_page():
+    # Đảm bảo st.session_state.items luôn là list
+    if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
+        st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
+    
     st.subheader("1. Chọn phương thức nhập liệu")
     st.session_state.phuong_thuc = st.radio("Chọn phương thức:", ["Nhập thủ công", "Sử dụng OCR"], index=0 if st.session_state.phuong_thuc == "Nhập thủ công" else 1)
     
@@ -696,6 +701,9 @@ def history_and_stats_page():
 
 # ============= ĐIỂM BẮT ĐẦU CHẠY ỨNG DỤNG =============
 if __name__ == "__main__":
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    
     if st.session_state.logged_in:
         main_app()
     else:
