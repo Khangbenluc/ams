@@ -215,8 +215,9 @@ def xu_ly_giao_dich(ho_va_ten, so_cccd, que_quan, items_list):
         tong_thanh_tien = 0
         hang_hoa_luu = []
         for item in items_list:
-            so_luong = float(str(item['so_luong']).replace(',', ''))
-            don_gia = float(str(item['don_gia']).replace(',', ''))
+            # Handle potential commas and spaces in number strings
+            so_luong = float(str(item['so_luong']).replace(',', '').replace(' ', ''))
+            don_gia = float(str(item['don_gia']).replace(',', '').replace(' ', ''))
             thanh_tien = so_luong * don_gia
             tong_thanh_tien += thanh_tien
             hang_hoa_luu.append({
@@ -345,7 +346,6 @@ def tao_pdf_mau_01(data, ten_don_vi=""):
     buffer.seek(0)
     return buffer
 
-
 # ========== GIAO DIỆN ==========
 def login_page():
     st.title("Đăng nhập/Đăng ký")
@@ -380,25 +380,17 @@ def main_app():
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
 
-    # KHẮC PHỤC LỖI TRIỆT ĐỂ: Luôn đảm bảo `st.session_state.items` là một danh sách hợp lệ
-    if 'items' not in st.session_state or not isinstance(st.session_state.items, list):
-        st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
-    
-    # Khởi tạo các biến session_state mặc định khác
-    defaults = {
-        "ho_ten": "",
-        "so_cccd": "",
-        "que_quan": "",
-        "pdf_for_download": None,
-        "giao_dich_data": None,
-        "ten_don_vi": "",
-        "phuong_thuc": "Nhập thủ công"
-    }
-    for k, v in defaults.items():
-        if k not in st.session_state:
-            st.session_state[k] = v
+    # FIX: Using setdefault to ensure all variables are always initialized,
+    # preventing the TypeError from occurring.
+    st.session_state.setdefault('items', [{"ten_hang": "", "so_luong": "", "don_gia": ""}])
+    st.session_state.setdefault("ho_ten", "")
+    st.session_state.setdefault("so_cccd", "")
+    st.session_state.setdefault("que_quan", "")
+    st.session_state.setdefault("pdf_for_download", None)
+    st.session_state.setdefault("giao_dich_data", None)
+    st.session_state.setdefault("ten_don_vi", "")
+    st.session_state.setdefault("phuong_thuc", "Nhập thủ công")
 
-    
     col_reset, col_logout = st.columns([1,1])
     with col_reset:
         if st.button("🔴 Clear Session State"):
@@ -406,8 +398,6 @@ def main_app():
             for key in list(st.session_state.keys()): # Use list() to avoid issues with modifying the dictionary during iteration
                 del st.session_state[key]
             st.session_state.logged_in = True # Keep the user logged in
-            # Thêm dòng này để đảm bảo items được khởi tạo lại đúng cách sau khi xóa
-            st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
             st.rerun()
 
     with col_logout:
