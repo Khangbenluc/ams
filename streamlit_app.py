@@ -379,16 +379,16 @@ def main_app():
     st.set_page_config(layout="wide")
     st.title("ỨNG DỤNG TẠO BẢN KÊ MUA HÀNG - 01/TNDN")
     st.markdown("---")
-
-    # FIX: Using setdefault to ensure all variables are always initialized,
-    # preventing the TypeError from occurring.
+    
+    # FIX: Initialize all session state variables at the start of the app
+    # to ensure they are always present, preventing the TypeError.
     st.session_state.setdefault('items', [{"ten_hang": "", "so_luong": "", "don_gia": ""}])
     st.session_state.setdefault("ho_ten", "")
     st.session_state.setdefault("so_cccd", "")
     st.session_state.setdefault("que_quan", "")
     st.session_state.setdefault("pdf_for_download", None)
     st.session_state.setdefault("giao_dich_data", None)
-    st.session_state.setdefault("ten_don_vi", "")
+    st.session_state.setdefault("ten_don_vi_input", "") # Updated key to match the widget key
     st.session_state.setdefault("phuong_thuc", "Nhập thủ công")
 
     col_reset, col_logout = st.columns([1,1])
@@ -396,8 +396,17 @@ def main_app():
         if st.button("🔴 Clear Session State"):
             # Explicitly clear the session state to fix corrupted data
             for key in list(st.session_state.keys()): # Use list() to avoid issues with modifying the dictionary during iteration
-                del st.session_state[key]
-            st.session_state.logged_in = True # Keep the user logged in
+                # Keep 'logged_in' and 'username'
+                if key not in ['logged_in', 'username']:
+                    del st.session_state[key]
+
+            # Re-initialize the necessary variables
+            st.session_state.ho_ten = ""
+            st.session_state.so_cccd = ""
+            st.session_state.que_quan = ""
+            st.session_state.ten_don_vi_input = ""
+            st.session_state.phuong_thuc = "Nhập thủ công"
+            st.session_state.items = [{"ten_hang": "", "so_luong": "", "don_gia": ""}]
             st.rerun()
 
     with col_logout:
@@ -492,11 +501,11 @@ def create_new_transaction_page():
     with col_add_item:
         if st.button("➕ Thêm món hàng", disabled=(len(st.session_state.items) >= 3)):
             st.session_state.items.append({"ten_hang": "", "so_luong": "", "don_gia": ""})
-            st.rerun()
+            st.rerun() # Use rerun to update the UI
     with col_remove_item:
         if st.button("➖ Xóa món hàng cuối", disabled=(len(st.session_state.items) <= 1)):
             st.session_state.items.pop()
-            st.rerun()
+            st.rerun() # Use rerun to update the UI
 
     # Tạo các cột nhập liệu cho từng món hàng
     for i in range(len(st.session_state.items)):
@@ -555,8 +564,8 @@ def create_new_transaction_page():
     st.markdown("---")
     if st.button("Làm mới trang", key="refresh_button"):
         # reset keys (giữ login)
-        for k in ["ho_ten", "so_cccd", "que_quan", "pdf_for_download", "giao_dich_data", "ten_don_vi", 
-                  "phuong_thuc", "items", "ho_ten_input", "so_cccd_input", "que_quan_input", "ten_don_vi_input"]:
+        for k in ["ho_ten", "so_cccd", "que_quan", "pdf_for_download", "giao_dich_data", "ten_don_vi_input", 
+                  "phuong_thuc", "items", "ho_ten_input", "so_cccd_input", "que_quan_input"]:
             if k in st.session_state:
                 del st.session_state[k]
         st.rerun()
